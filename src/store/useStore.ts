@@ -10,15 +10,17 @@ import {
   where, 
   getDoc,
   getDocs,
-  serverTimestamp
+  serverTimestamp,
+  setDoc
 } from 'firebase/firestore';
 import { 
   onAuthStateChanged,
   signOut,
   updatePassword as fbUpdatePassword,
-  deleteUser
+  deleteUser,
+  signInWithPopup
 } from 'firebase/auth';
-import { db, auth } from '../lib/firebase';
+import { auth, db, googleProvider } from '../lib/firebase';
 
 // 데이터 모델 타입 정의
 export interface Plan {
@@ -137,6 +139,8 @@ interface AppState extends AppData {
 
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
   updatePaymentStatus: (id: string, status: '완료' | '미납') => Promise<void>;
+  updateGymPlan: (plan: GymAccount['plan'], months?: number) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
 
   editingMember: Member | null;
   isMemberModalOpen: boolean;
@@ -232,9 +236,25 @@ export const useStore = create<AppState>((set, get) => ({
             onSnapshot(gymIdQuery('attendances'), snap => set({ attendances: snap.docs.map(d => ({ id: d.id, ...d.data() } as Attendance)) }));
             onSnapshot(gymIdQuery('payments'), snap => set({ payments: snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment)) }));
           } else {
-            // 문서가 정말 없음 (오류 상황)
-            console.error('User records not found in gyms collection.');
-            set({ isAuthenticated: false, userRole: null, isLoading: false });
+            // 문서가 정말 없음 (회원가입 직후 혹은 SNS 로그인 첫 진입)
+            if (email !== 'hjbyun0921@naver.com') {
+              console.log('No gym record found for this user. Creating default record...');
+              await setDoc(doc(db, 'gyms', user.uid), {
+                gymName: '신규 도장 (수정 필요)',
+                ownerEmail: email,
+                registeredAt: new Date().toISOString().split('T')[0],
+                memberCount: 0,
+                plan: 'free',
+                planExpireDate: new Date(new Date().getFullYear() + 1, new Date().getMonth(), new Date().getDate()).toISOString().split('T')[0],
+                status: 'trial',
+                memo: '구글/SNS 가입',
+                gymPin: '0000',
+                theme: 'dark'
+              });
+              // 리스너가 다시 돌면서 처리됨
+            } else {
+              set({ isAuthenticated: false, userRole: null, isLoading: false });
+            }
           }
         } else {
           // 비로그인 상태
@@ -254,6 +274,16 @@ export const useStore = create<AppState>((set, get) => ({
   loginAs: (role, gymId, email, gymName) => set({
     isAuthenticated: true, userRole: role, gymId, adminEmail: email, gymName
   }),
+
+  loginWithGoogle: async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged 리스너가 사용자 정보를 감지하고 처리합니다.
+    } catch (err) {
+      console.error('Google Login Error:', err);
+      throw err;
+    }
+  },
 
   logout: async () => {
     await signOut(auth);
@@ -398,6 +428,30 @@ export const useStore = create<AppState>((set, get) => ({
 
   updatePaymentStatus: async (id, status) => {
     await updateDoc(doc(db, 'payments', id), { status });
+  },
+
+  updateGymPlan: async (plan: GymAccount['plan'], months: number = 1) => {
+    const { gymId } = get();
+    if (!gymId || gymId === 'ALL') return;
+
+    const today = new Date();
+    const expireDate = new Date(today.getFullYear(), today.getMonth() + months, today.getDate()).toISOString().split('T')[0];
+
+    await updateDoc(doc(db, 'gyms', gymId), { 
+      plan, 
+      planExpireDate: expireDate,
+      status: 'active' 
+    });
+    
+    // 결제 내역에도 추가
+    await addDoc(collection(db, 'payments'), {
+      gymId,
+      amount: plan === 'plus' ? 14900 * months : plan === 'basic' ? 6900 * months : 0,
+      item: `${plan.toUpperCase()} 요금제 (${months}개월)`,
+      date: new Date().toISOString().split('T')[0],
+      status: 'paid',
+      method: 'toss'
+    });
   },
 
   updateSettings: async (theme, profileImage) => {

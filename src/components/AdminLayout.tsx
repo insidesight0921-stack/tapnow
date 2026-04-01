@@ -144,6 +144,9 @@ export default function AdminLayout() {
           <NavLink to="/admin/payments" style={navStyle} onClick={handleNavLinkClick}>
             💳 결제 관리
           </NavLink>
+          <NavLink to="/admin/plan" style={navStyle} onClick={handleNavLinkClick}>
+            🚀 멤버십 구독
+          </NavLink>
 
           {/* 알림 요약 */}
           {totalAlerts > 0 && (

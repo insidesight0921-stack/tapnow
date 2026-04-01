@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Lock } from 'lucide-react';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword 
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { Lock } from 'lucide-react';
+import { useStore } from '../store/useStore';
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -224,6 +225,35 @@ export default function LoginPage() {
             {isSubmitting ? '처리 중...' : (isLogin ? '로그인' : '회원가입')}
           </button>
         </form>
+
+        {/* SNS 로그인 구분선 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '1.5rem 0' }}>
+          <div style={{ flex: 1, height: '1px', background: 'var(--outline-variant)' }} />
+          <span style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>또는 SNS로 시작하기</span>
+          <div style={{ flex: 1, height: '1px', background: 'var(--outline-variant)' }} />
+        </div>
+
+        {/* 구글 로그인 버튼 */}
+        <button 
+          type="button"
+          onClick={async () => {
+            try {
+              setError('');
+              await useStore.getState().loginWithGoogle();
+            } catch (err) {
+              setError('구글 로그인에 실패했습니다.');
+            }
+          }}
+          disabled={isSubmitting}
+          style={{ 
+            width: '100%', height: '48px', background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)', 
+            color: 'var(--on-surface)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, fontSize: '0.9375rem',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem'
+          }}
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style={{ width: '18px' }} />
+          구글로 시작하기
+        </button>
       </motion.div>
     </div>
   );

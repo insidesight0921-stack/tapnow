@@ -7,6 +7,7 @@ import AdminLayout from './components/AdminLayout';
 import MembersPage from './pages/MembersPage';
 import AttendancePage from './pages/AttendancePage';
 import PaymentPage from './pages/PaymentPage';
+import PlanPage from './pages/PlanPage';
 import SuperAdminPage from './pages/SuperAdminPage';
 
 // 일반 도장 관리자 전용 가드
@@ -76,6 +77,7 @@ function App() {
         <Route path="members" element={<MembersPage />} />
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="payments" element={<PaymentPage />} />
+        <Route path="plan" element={<PlanPage />} />
       </Route>
 
       {/* 슈퍼 관리자(본사) 대시보드 */}
