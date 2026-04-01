@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Lock } from 'lucide-react';
@@ -20,6 +20,18 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const navigate = useNavigate();
+  const { isAuthenticated, userRole, loginWithGoogle } = useStore();
+
+  // 이미 로그인된 경우 자동 리다이렉트
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (userRole === 'SUPER_ADMIN') {
+        navigate('/superadmin');
+      } else {
+        navigate('/admin/members');
+      }
+    }
+  }, [isAuthenticated, userRole, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -239,20 +251,37 @@ export default function LoginPage() {
           onClick={async () => {
             try {
               setError('');
-              await useStore.getState().loginWithGoogle();
-            } catch (err) {
-              setError('구글 로그인에 실패했습니다.');
+              setIsSubmitting(true);
+              await loginWithGoogle();
+            } catch (err: any) {
+              console.error('Google Login Error:', err);
+              if (err.code === 'auth/popup-closed-by-user') {
+                setError('로그인 창이 닫혔습니다. 다시 시도해주세요.');
+              } else if (err.code === 'auth/cancelled-by-user') {
+                setError('로그인이 취소되었습니다.');
+              } else {
+                setError('구글 로그인 중 오류가 발생했습니다.');
+              }
+            } finally {
+              setIsSubmitting(false);
             }
           }}
           disabled={isSubmitting}
           style={{ 
             width: '100%', height: '48px', background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)', 
-            color: 'var(--on-surface)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, fontSize: '0.9375rem',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem'
+            color: 'var(--on-surface)', borderRadius: 'var(--radius-md)', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.9375rem',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem',
+            opacity: isSubmitting ? 0.7 : 1
           }}
         >
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style={{ width: '18px' }} />
-          구글로 시작하기
+          {isSubmitting ? (
+            <div className="loading-spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></div>
+          ) : (
+            <>
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style={{ width: '18px' }} />
+              구글로 시작하기
+            </>
+          )}
         </button>
       </motion.div>
     </div>

@@ -239,8 +239,10 @@ export const useStore = create<AppState>((set, get) => ({
             // 문서가 정말 없음 (회원가입 직후 혹은 SNS 로그인 첫 진입)
             if (email !== 'hjbyun0921@naver.com') {
               console.log('No gym record found for this user. Creating default record...');
+              const defaultGymName = user.displayName ? `${user.displayName} 도장` : '신규 도장 (수정 필요)';
+              
               await setDoc(doc(db, 'gyms', user.uid), {
-                gymName: '신규 도장 (수정 필요)',
+                gymName: defaultGymName,
                 ownerEmail: email,
                 registeredAt: new Date().toISOString().split('T')[0],
                 memberCount: 0,
@@ -278,7 +280,6 @@ export const useStore = create<AppState>((set, get) => ({
   loginWithGoogle: async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged 리스너가 사용자 정보를 감지하고 처리합니다.
     } catch (err) {
       console.error('Google Login Error:', err);
       throw err;
