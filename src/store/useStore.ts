@@ -193,9 +193,11 @@ export const useStore = create<AppState>((set, get) => ({
               isLoading: false 
             });
             
-            // 전용 구독
+            // 전용 구독 (본사 관리자 계정은 리스트에서 제외)
             onSnapshot(collection(db, 'gyms'), (snap) => {
-              const accounts = snap.docs.map(d => ({ id: d.id, ...d.data() } as GymAccount));
+              const accounts = snap.docs
+                .map(d => ({ id: d.id, ...d.data() } as GymAccount))
+                .filter(acc => acc.ownerEmail?.toLowerCase().trim() !== 'hjbyun0921@naver.com');
               set({ gymAccounts: accounts });
             });
             return;
