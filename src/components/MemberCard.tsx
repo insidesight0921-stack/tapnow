@@ -128,10 +128,14 @@ export default function MemberCard({ member }: { member: Member }) {
           }}
           onMouseOver={(e) => { if (!attendedToday) { e.currentTarget.style.background = '#52b788'; e.currentTarget.style.color = '#000'; }}}
           onMouseOut={(e) => { if (!attendedToday) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#52b788'; }}}
-          onClick={() => {
+          onClick={async () => {
             if (attendedToday) return;
-            markAttendance(member.id);
-            alert(`${member.name} 님의 오늘(${todayStr}) 출석이 처리되었습니다.`);
+            try {
+              await markAttendance(member.id);
+              alert(`${member.name} 님의 오늘(${todayStr}) 출석이 처리되었습니다.`);
+            } catch (err) {
+              alert('출석 처리 중 오류가 발생했습니다.');
+            }
           }}
         >
           {attendedToday ? '✅ 출석 완료' : '출석 처리'}

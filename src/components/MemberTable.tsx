@@ -94,10 +94,14 @@ export default function MemberTable({ members }: { members: Member[] }) {
                       cursor: attendedToday ? 'default' : 'pointer',
                       whiteSpace: 'nowrap', opacity: attendedToday ? 0.7 : 1
                     }}
-                    onClick={() => {
+                    onClick={async () => {
                       if (attendedToday) return;
-                      markAttendance(member.id);
-                      alert(`${member.name} 님의 오늘(${todayStr}) 출석이 처리되었습니다.`);
+                      try {
+                        await markAttendance(member.id);
+                        alert(`${member.name} 님의 오늘(${todayStr}) 출석이 처리되었습니다.`);
+                      } catch (err) {
+                        alert('출석 처리 중 오류가 발생했습니다.');
+                      }
                     }}
                   >{attendedToday ? '✅ 완료' : '출석'}</button>
                 </td>

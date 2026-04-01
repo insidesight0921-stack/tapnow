@@ -73,8 +73,11 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
     // 선택된 요금제 기준으로 만료일 계산
     let expireDate = '';
@@ -107,16 +110,17 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
     };
 
     if (memberToEdit) {
-      updateMember(memberToEdit.id, payload);
+      await updateMember(memberToEdit.id, payload);
       onClose();
     } else {
-      const result = addMember(payload);
+      const result = await addMember(payload);
       if (result.success) {
         onClose();
       } else {
         setError(result.message);
       }
     }
+    setIsSubmitting(false);
   };
 
   return (
@@ -229,8 +233,10 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '0.75rem' }}>
-                <button type="button" onClick={onClose} style={{ flex: isMobile ? 1 : 'unset', padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>취소</button>
-                <button type="submit" style={{ flex: isMobile ? 1 : 'unset', padding: '0.75rem 1.5rem', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>{memberToEdit ? '저장' : '등록'}</button>
+                <button type="button" onClick={onClose} disabled={isSubmitting} style={{ flex: isMobile ? 1 : 'unset', padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>취소</button>
+                <button type="submit" disabled={isSubmitting} style={{ flex: isMobile ? 1 : 'unset', padding: '0.75rem 1.5rem', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>
+                  {isSubmitting ? '처리 중...' : (memberToEdit ? '저장' : '등록')}
+                </button>
               </div>
 
             </form>

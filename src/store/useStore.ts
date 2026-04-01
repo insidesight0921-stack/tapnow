@@ -1,4 +1,24 @@
 import { create } from 'zustand';
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  onSnapshot, 
+  query, 
+  where, 
+  getDoc,
+  getDocs,
+  serverTimestamp
+} from 'firebase/firestore';
+import { 
+  onAuthStateChanged,
+  signOut,
+  updatePassword as fbUpdatePassword,
+  deleteUser
+} from 'firebase/auth';
+import { db, auth } from '../lib/firebase';
 
 // 데이터 모델 타입 정의
 export interface Plan {
@@ -41,16 +61,14 @@ export interface Attendance {
   date: string; // YYYY-MM-DD 형식
 }
 
-// 도장 구독 정보 (소유자 전용)
 export interface GymAccount {
   id: string;
   gymName: string;
   ownerEmail: string;
-  ownerPassword?: string; // 추가: 로그인 검증용
-  registeredAt: string; // YYYY-MM-DD
+  registeredAt: string;
   memberCount: number;
   plan: 'free' | 'basic' | 'plus';
-  planExpireDate: string; // YYYY-MM-DD
+  planExpireDate: string;
   status: 'active' | 'suspended' | 'trial';
   memo: string;
 }
@@ -62,69 +80,64 @@ export interface Payment {
   amount: number;
   method: '카드' | '현금' | '계좌이체' | '기타';
   planName: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   status: '완료' | '미납';
 }
 
-interface AppState {
+interface AppData {
   members: Member[];
   plans: Plan[];
   attendances: Attendance[];
   payments: Payment[];
-
   gymAccounts: GymAccount[];
-
-  // Auth & Multi-tenant state
+  
   isAuthenticated: boolean;
   userRole: 'SUPER_ADMIN' | 'GYM_ADMIN' | null;
   gymId: string | null;
   gymName: string;
   adminEmail: string | null;
-  adminPassword: string;
-  gymPin: string; // 키오스크 4자리 PIN
+  gymPin: string;
   theme: 'dark' | 'light';
   profileImage: string | null;
+}
 
-  // Super Admin 전용 액션 (도장 계정 관리)
-  addGymAccount: (gym: Omit<GymAccount, 'id'>) => void;
-  updateGymAccount: (id: string, fields: Partial<GymAccount>) => void;
-  deleteGymAccount: (id: string) => void;
-
-  // Actions
-  loginAs: (role: 'SUPER_ADMIN' | 'GYM_ADMIN', gymId: string, email: string, gymName: string, password?: string) => void;
-  logout: () => void;
-  updateEmail: (email: string) => void;
-  updatePassword: (password: string) => void;
-  updatePin: (pin: string) => void;
-  deleteAccount: () => void;
-
-  // Member Actions
-  addMember: (member: Omit<Member, 'id'>) => { success: boolean; message: string };
-  updateMember: (id: string, member: Partial<Member>) => void;
-  deleteMember: (id: string) => void;
+interface AppState extends AppData {
+  isLoading: boolean;
   
-  // Gym Signup
-  signupGym: (gymName: string, email: string, password: string) => void;
+  // Actions
+  init: () => () => void;
+  
+  addGymAccount: (gym: Omit<GymAccount, 'id'>) => Promise<void>;
+  updateGymAccount: (id: string, fields: Partial<GymAccount>) => Promise<void>;
+  deleteGymAccount: (id: string) => Promise<void>;
 
-  // Settings Actions
-  updateSettings: (theme: 'dark' | 'light', profileImage: string | null) => void;
+  loginAs: (role: 'SUPER_ADMIN' | 'GYM_ADMIN', gymId: string, email: string, gymName: string) => void;
+  logout: () => Promise<void>;
+  updateEmail: (email: string) => void;
+  updatePassword: (password: string) => Promise<void>;
+  updatePin: (pin: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 
-  // Plan Actions
-  addPlan: (plan: Omit<Plan, 'id'>) => void;
-  updatePlan: (id: string, plan: Partial<Plan>) => void;
-  deletePlan: (id: string) => void;
+  addMember: (member: Omit<Member, 'id'>) => Promise<{ success: boolean; message: string }>;
+  updateMember: (id: string, member: Partial<Member>) => Promise<void>;
+  deleteMember: (id: string) => Promise<void>;
+  
+  signupGym: (gymName: string, email: string) => void;
 
-  // Attendance Actions
-  markAttendance: (memberId: string) => void;
-  bulkMarkAttendance: (memberIds: string[]) => void;
-  deleteAttendance: (attendanceId: string) => void;
-  addPastAttendance: (memberId: string, dateStr: string) => void;
+  updateSettings: (theme: 'dark' | 'light', profileImage: string | null) => Promise<void>;
 
-  // Payment Actions
-  addPayment: (payment: Omit<Payment, 'id'>) => void;
-  updatePaymentStatus: (id: string, status: '완료' | '미납') => void;
+  addPlan: (plan: Omit<Plan, 'id'>) => Promise<void>;
+  updatePlan: (id: string, plan: Partial<Plan>) => Promise<void>;
+  deletePlan: (id: string) => Promise<void>;
 
-  // UI State
+  markAttendance: (memberId: string) => Promise<void>;
+  bulkMarkAttendance: (memberIds: string[]) => Promise<void>;
+  deleteAttendance: (attendanceId: string) => Promise<void>;
+  addPastAttendance: (memberId: string, dateStr: string) => Promise<void>;
+
+  addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
+  updatePaymentStatus: (id: string, status: '완료' | '미납') => Promise<void>;
+
   editingMember: Member | null;
   isMemberModalOpen: boolean;
   openMemberModal: (member?: Member) => void;
@@ -139,257 +152,264 @@ interface AppState {
   closeCsvModal: () => void;
 }
 
-// 오늘 날짜를 YYYY-MM-DD 형식으로 반환
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-export const useStore = create<AppState>((set) => ({
-  members: [
-    {
-      id: 'm1', gymId: 'gym_01', name: '홍길동', phone: '010-1234-5678', belt: '블루', gral: 2,
-      registerDate: '2026-01-01', startDate: '2026-01-01',
-      plans: [{ name: '주 3회권', qty: 1, remainingQty: 8, type: '횟수권' }],
-      paymentAmount: 150000, paymentMethod: '카드 결제', expireDate: '2026-04-30', memo: ''
-    },
-    {
-      id: 'm2', gymId: 'gym_01', name: '김철수', phone: '010-9999-1111', belt: '화이트', gral: 0,
-      registerDate: '2026-02-01', startDate: '2026-02-01',
-      plans: [{ name: '1개월 무제한', qty: 1, type: '기간권' }],
-      paymentAmount: 180000, paymentMethod: '현금', expireDate: '2026-03-01', memo: '도복 포함'
-    }
-  ],
-  plans: [
-    { id: 'p1', name: '주 2회권', price: 140000, months: 1, type: '횟수권', defaultQty: 8 },
-    { id: 'p2', name: '주 3회권', price: 150000, months: 1, type: '횟수권', defaultQty: 12 },
-    { id: 'p3', name: '1개월 무제한', price: 180000, months: 1, type: '기간권' },
-    { id: 'p4', name: '3개월 무제한', price: 450000, months: 3, type: '기간권' },
-  ],
+export const useStore = create<AppState>((set, get) => ({
+  members: [],
+  plans: [],
   attendances: [],
-  payments: [
-    { id: 'pay1', memberId: 'm1', memberName: '홍길동', amount: 150000, method: '카드', planName: '주 3회권', date: '2026-01-01', status: '완료' },
-    { id: 'pay2', memberId: 'm2', memberName: '김철수', amount: 180000, method: '현금', planName: '1개월 무제한', date: '2026-02-01', status: '완료' },
-  ],
-
-  // 등록된 도장 계정 (소유자 전용 관리)
-  gymAccounts: [
-    {
-      id: 'gym_01', gymName: '오닉스 주짓수 본관', ownerEmail: 'gym@tapnow.com', ownerPassword: '1234',
-      registeredAt: '2026-01-15', memberCount: 45, plan: 'basic', planExpireDate: '2026-07-15',
-      status: 'active', memo: ''
-    },
-    {
-      id: 'gym_02', gymName: '타이거 주짓수', ownerEmail: 'tiger@tapnow.com', ownerPassword: 'abc1234',
-      registeredAt: '2026-02-20', memberCount: 28, plan: 'free', planExpireDate: '2026-08-20',
-      status: 'active', memo: '신규 가맹점'
-    },
-    {
-      id: 'gym_03', gymName: '주짓수랩 강남', ownerEmail: 'lab@tapnow.com',
-      registeredAt: '2026-03-01', memberCount: 82, plan: 'plus', planExpireDate: '2026-09-01',
-      status: 'active', memo: '카카오톡 연동 도장'
-    }
-  ],
-
-  // UI State 초기값
-  editingMember: null,
-  isMemberModalOpen: false,
-  openMemberModal: (member) => set({ isMemberModalOpen: true, editingMember: member || null }),
-  closeMemberModal: () => set({ isMemberModalOpen: false, editingMember: null }),
-
-  isPlanModalOpen: false,
-  openPlanModal: () => set({ isPlanModalOpen: true }),
-  closePlanModal: () => set({ isPlanModalOpen: false }),
-
-  isCsvModalOpen: false,
-  openCsvModal: () => set({ isCsvModalOpen: true }),
-  closeCsvModal: () => set({ isCsvModalOpen: false }),
-
-  // Owner 전용 도장 CRUD
-  addGymAccount: (gym) => set((state) => ({
-    gymAccounts: [...state.gymAccounts, { ...gym, id: `gym_${Date.now()}` }]
-  })),
-  updateGymAccount: (id, fields) => set((state) => ({
-    gymAccounts: state.gymAccounts.map(g => g.id === id ? { ...g, ...fields } : g)
-  })),
-  deleteGymAccount: (id) => set((state) => ({
-    gymAccounts: state.gymAccounts.filter(g => g.id !== id)
-  })),
-
-  // Auth 초기 상태
+  payments: [],
+  gymAccounts: [],
+  
   isAuthenticated: false,
   userRole: null,
   gymId: null,
   gymName: '',
   adminEmail: null,
-  adminPassword: '',
-  gymPin: '0000', // 기본 키오스크 PIN
+  gymPin: '0000',
   theme: 'dark',
   profileImage: null,
+  isLoading: true,
 
-  updateSettings: (theme: 'dark' | 'light', profileImage: string | null) => set({ theme, profileImage }),
-  updateEmail: (email: string) => set({ adminEmail: email }),
-  updatePassword: (password: string) => set({ adminPassword: password }),
-  updatePin: (pin: string) => set({ gymPin: pin }),
-  deleteAccount: () => set({
-    isAuthenticated: false, userRole: null, gymId: null, gymName: '', adminEmail: null, adminPassword: ''
-  }),
+  editingMember: null,
+  isMemberModalOpen: false,
+  isPlanModalOpen: false,
+  isCsvModalOpen: false,
 
-  loginAs: (role: 'SUPER_ADMIN' | 'GYM_ADMIN', gymId: string, email: string, gymName: string, password = '') => set({
-    isAuthenticated: true,
-    userRole: role,
-    gymId,
-    adminEmail: email,
-    adminPassword: password,
-    gymName
-  }),
-  logout: () => set({
-    isAuthenticated: false,
-    userRole: null,
-    gymId: null,
-    gymName: '',
-    adminEmail: null
-  }),
+  init: () => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      try {
+        if (user) {
+          const email = user.email?.trim().toLowerCase();
+          
+          // 1. 슈퍼 관리자 체크
+          if (email === 'hjbyun0921@naver.com') {
+            set({ 
+              isAuthenticated: true, 
+              userRole: 'SUPER_ADMIN', 
+              gymId: 'ALL', 
+              gymName: 'TAPNOW 본사',
+              adminEmail: user.email,
+              isLoading: false 
+            });
+            
+            // 전용 구독
+            onSnapshot(collection(db, 'gyms'), (snap) => {
+              const accounts = snap.docs.map(d => ({ id: d.id, ...d.data() } as GymAccount));
+              set({ gymAccounts: accounts });
+            });
+            return;
+          }
 
-  addMember: (member) => {
-    const state = useStore.getState();
-    const currentGym = state.gymAccounts.find(g => g.id === member.gymId);
-    
-    if (currentGym && currentGym.plan === 'free') {
-      const currentCount = state.members.filter(m => m.gymId === member.gymId).length;
-      if (currentCount >= 35) {
-        return { success: false, message: '무료 요금제 한도(35명)를 초과했습니다. 베이직 이상 요금제로 업그레이드가 필요합니다.' };
+          // 2. 일반 도장 관리자 - 문서 로딩 시도 (최대 3회 재시도, 회원가입 직후 레이턴시 대비)
+          let gymDoc = await getDoc(doc(db, 'gyms', user.uid));
+          
+          if (!gymDoc.exists()) {
+            // 회원가입 직후라면 문서 생성 중일 수 있으므로 1초 대기 후 한 번 더 시도
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            gymDoc = await getDoc(doc(db, 'gyms', user.uid));
+          }
+
+          if (gymDoc.exists()) {
+            const gymData = gymDoc.data() as Omit<GymAccount, 'id'>;
+            set({ 
+              isAuthenticated: true, 
+              userRole: 'GYM_ADMIN', 
+              gymId: user.uid, 
+              gymName: gymData.gymName,
+              adminEmail: user.email,
+              gymPin: (gymData as any).gymPin || '0000',
+              theme: (gymData as any).theme || 'dark',
+              isLoading: false
+            });
+
+            // 데이터 실시간 구독 시작
+            const gymIdQuery = (coll: string) => query(collection(db, coll), where('gymId', '==', user.uid));
+            onSnapshot(gymIdQuery('members'), snap => set({ members: snap.docs.map(d => ({ id: d.id, ...d.data() } as Member)) }));
+            onSnapshot(gymIdQuery('plans'), snap => set({ plans: snap.docs.map(d => ({ id: d.id, ...d.data() } as Plan)) }));
+            onSnapshot(gymIdQuery('attendances'), snap => set({ attendances: snap.docs.map(d => ({ id: d.id, ...d.data() } as Attendance)) }));
+            onSnapshot(gymIdQuery('payments'), snap => set({ payments: snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment)) }));
+          } else {
+            // 문서가 정말 없음 (오류 상황)
+            console.error('User records not found in gyms collection.');
+            set({ isAuthenticated: false, userRole: null, isLoading: false });
+          }
+        } else {
+          // 비로그인 상태
+          set({ isAuthenticated: false, userRole: null, gymId: null, members: [], attendances: [], isLoading: false });
+        }
+      } catch (err) {
+        console.error('Auth state change error:', err);
+        set({ isLoading: false });
       }
+    });
+
+    return () => {
+      unsubAuth();
+    };
+  },
+
+  loginAs: (role, gymId, email, gymName) => set({
+    isAuthenticated: true, userRole: role, gymId, adminEmail: email, gymName
+  }),
+
+  logout: async () => {
+    await signOut(auth);
+    set({ isAuthenticated: false, userRole: null, gymId: null, gymName: '', adminEmail: null });
+  },
+
+  signupGym: () => {
+    // LoginPage에서 createUserWithEmailAndPassword 이후 호출됨
+  },
+
+  addGymAccount: async (gym) => {
+    await addDoc(collection(db, 'gyms'), gym);
+  },
+
+  updateGymAccount: async (id, fields) => {
+    await updateDoc(doc(db, 'gyms', id), fields);
+  },
+
+  deleteGymAccount: async (id) => {
+    await deleteDoc(doc(db, 'gyms', id));
+  },
+
+  updateEmail: (email) => set({ adminEmail: email }),
+  
+  updatePassword: async (password) => {
+    if (auth.currentUser) {
+      await fbUpdatePassword(auth.currentUser, password);
+    }
+  },
+
+  updatePin: async (pin) => {
+    const { gymId } = get();
+    if (gymId && gymId !== 'ALL') {
+      await updateDoc(doc(db, 'gyms', gymId), { gymPin: pin });
+      set({ gymPin: pin });
+    }
+  },
+
+  deleteAccount: async () => {
+    if (auth.currentUser) {
+      const gId = get().gymId;
+      if (gId && gId !== 'ALL') {
+        await deleteDoc(doc(db, 'gyms', gId));
+      }
+      await deleteUser(auth.currentUser);
+    }
+  },
+
+  addMember: async (member) => {
+    const { gymId, gymAccounts, members } = get();
+    const currentGym = gymAccounts.find(g => g.id === gymId);
+    
+    if (currentGym?.plan === 'free' && members.length >= 35) {
+      return { success: false, message: '무료 요금제 한도(35명)를 초과했습니다.' };
     }
 
-    set((state) => ({
-      members: [...state.members, { ...member, id: `m${Date.now()}` }]
-    }));
+    await addDoc(collection(db, 'members'), { ...member, gymId });
     return { success: true, message: '회원이 등록되었습니다.' };
   },
-  updateMember: (id, updatedFields) => set((state) => ({
-    members: state.members.map(m => m.id === id ? { ...m, ...updatedFields } : m)
-  })),
-  deleteMember: (id) => set((state) => ({
-    members: state.members.filter(m => m.id !== id),
-    attendances: state.attendances.filter(a => a.memberId !== id)
-  })),
 
-  addPlan: (plan) => set((state) => ({
-    plans: [...state.plans, { ...plan, id: `p${Date.now()}` }]
-  })),
-  updatePlan: (id, updatedFields) => set((state) => ({
-    plans: state.plans.map(p => p.id === id ? { ...p, ...updatedFields } : p)
-  })),
-  deletePlan: (id) => set((state) => ({
-    plans: state.plans.filter(p => p.id !== id)
-  })),
+  updateMember: async (id, updatedFields) => {
+    await updateDoc(doc(db, 'members', id), updatedFields);
+  },
 
-  // 출석 날짜만 저장 (YYYY-MM-DD), 중복 방지, 횟수권 차감
-  markAttendance: (memberId) => set((state) => {
-    const member = state.members.find(m => m.id === memberId);
-    if (!member) return state;
+  deleteMember: async (id) => {
+    await deleteDoc(doc(db, 'members', id));
+    // 관련 출석 기록도 삭제 (Cloud Function이 이상적이나 여기서는 클라이언트에서 처리)
+    const q = query(collection(db, 'attendances'), where('memberId', '==', id));
+    const snap = await getDocs(q);
+    const deletePromises = snap.docs.map((d: any) => deleteDoc(d.ref));
+    await Promise.all(deletePromises);
+  },
+
+  addPlan: async (plan) => {
+    const { gymId } = get();
+    await addDoc(collection(db, 'plans'), { ...plan, gymId });
+  },
+
+  updatePlan: async (id, updatedFields) => {
+    await updateDoc(doc(db, 'plans', id), updatedFields);
+  },
+
+  deletePlan: async (id) => {
+    await deleteDoc(doc(db, 'plans', id));
+  },
+
+  markAttendance: async (memberId) => {
+    const { members, attendances, gymId } = get();
+    const member = members.find(m => m.id === memberId);
+    if (!member) return;
 
     const todayStr = getTodayStr();
-    // 오늘 이미 출석했으면 추가 안 함
-    if (state.attendances.some(a => a.memberId === memberId && a.date === todayStr)) {
-      return state;
+    if (attendances.some(a => a.memberId === memberId && a.date === todayStr)) return;
+
+    await addDoc(collection(db, 'attendances'), {
+      gymId,
+      memberId,
+      memberName: member.name,
+      date: todayStr,
+      timestamp: serverTimestamp()
+    });
+
+    const updatedPlans = member.plans.map(p => {
+      if (p.type === '횟수권' && p.remainingQty !== undefined && p.remainingQty > 0) {
+        return { ...p, remainingQty: p.remainingQty - 1 };
+      }
+      return p;
+    });
+
+    await updateDoc(doc(db, 'members', memberId), { plans: updatedPlans });
+  },
+
+  bulkMarkAttendance: async (memberIds) => {
+    for (const id of memberIds) {
+      await get().markAttendance(id);
     }
+  },
 
-    const newAttendance: Attendance = {
-      id: `a${Date.now()}_${Math.random()}`,
-      memberId,
-      memberName: member.name,
-      date: todayStr
-    };
+  deleteAttendance: async (id) => {
+    await deleteDoc(doc(db, 'attendances', id));
+  },
 
-    // 횟수권 회원의 잔여 횟수 차감
-    const updatedMembers = state.members.map(m => {
-      if (m.id !== memberId) return m;
-      const updatedPlans = m.plans.map(p => {
-        if (p.type === '횟수권' && p.remainingQty !== undefined && p.remainingQty > 0) {
-          return { ...p, remainingQty: p.remainingQty - 1 };
-        }
-        return p;
-      });
-      return { ...m, plans: updatedPlans };
-    });
-
-    return {
-      attendances: [...state.attendances, newAttendance],
-      members: updatedMembers
-    };
-  }),
-
-  bulkMarkAttendance: (memberIds) => set((state) => {
-    const todayStr = getTodayStr();
-    const newAttendances: Attendance[] = [];
-    let updatedMembers = [...state.members];
-
-    memberIds.forEach(memberId => {
-      if (state.attendances.some(a => a.memberId === memberId && a.date === todayStr)) return;
-      const member = state.members.find(m => m.id === memberId);
-      if (!member) return;
-      newAttendances.push({
-        id: `a${Date.now()}_${Math.random()}`,
-        memberId,
-        memberName: member.name,
-        date: todayStr
-      });
-      updatedMembers = updatedMembers.map(m => {
-        if (m.id !== memberId) return m;
-        const updatedPlans = m.plans.map(p => {
-          if (p.type === '횟수권' && p.remainingQty !== undefined && p.remainingQty > 0) {
-            return { ...p, remainingQty: p.remainingQty - 1 };
-          }
-          return p;
-        });
-        return { ...m, plans: updatedPlans };
-      });
-    });
-
-    return { attendances: [...state.attendances, ...newAttendances], members: updatedMembers };
-  }),
-
-  deleteAttendance: (attendanceId) => set((state) => ({
-    attendances: state.attendances.filter(a => a.id !== attendanceId)
-  })),
-
-  addPastAttendance: (memberId, dateStr) => set((state) => {
-    const member = state.members.find(m => m.id === memberId);
-    if (!member) return state;
-    // 날짜만 추출 (YYYY-MM-DD)
+  addPastAttendance: async (memberId, dateStr) => {
+    const { members, gymId } = get();
+    const member = members.find(m => m.id === memberId);
+    if (!member) return;
     const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-    const newAttendance: Attendance = {
-      id: `a${Date.now()}_${Math.random()}`,
+
+    await addDoc(collection(db, 'attendances'), {
+      gymId,
       memberId,
       memberName: member.name,
-      date: dateOnly
-    };
-    return { attendances: [...state.attendances, newAttendance] };
-  }),
+      date: dateOnly,
+      timestamp: serverTimestamp()
+    });
+  },
 
-  addPayment: (payment) => set((state) => ({
-    payments: [...state.payments, { ...payment, id: `pay${Date.now()}` }]
-  })),
-  updatePaymentStatus: (id, status) => set((state) => ({
-    payments: state.payments.map(p => p.id === id ? { ...p, status } : p)
-  })),
+  addPayment: async (payment) => {
+    const { gymId } = get();
+    await addDoc(collection(db, 'payments'), { ...payment, gymId });
+  },
 
-  // Sign Up Action
-  signupGym: (gymName, email, password) => set((state) => {
-    const newGymId = `gym_${Date.now()}`;
-    const newGym: GymAccount = {
-      id: newGymId,
-      gymName,
-      ownerEmail: email,
-      ownerPassword: password,
-      registeredAt: getTodayStr(),
-      memberCount: 0,
-      plan: 'free',
-      planExpireDate: new Date(new Date().getFullYear() + 1, new Date().getMonth(), new Date().getDate()).toISOString().split('T')[0],
-      status: 'active',
-      memo: '직접 가맹'
-    };
-    return {
-      gymAccounts: [...state.gymAccounts, newGym]
-    };
-  }),
+  updatePaymentStatus: async (id, status) => {
+    await updateDoc(doc(db, 'payments', id), { status });
+  },
+
+  updateSettings: async (theme, profileImage) => {
+    const { gymId } = get();
+    if (gymId && gymId !== 'ALL') {
+      await updateDoc(doc(db, 'gyms', gymId), { theme, profileImage });
+      set({ theme, profileImage });
+    }
+  },
+
+  openMemberModal: (member) => set({ isMemberModalOpen: true, editingMember: member || null }),
+  closeMemberModal: () => set({ isMemberModalOpen: false, editingMember: null }),
+  openPlanModal: () => set({ isPlanModalOpen: true }),
+  closePlanModal: () => set({ isPlanModalOpen: false }),
+  openCsvModal: () => set({ isCsvModalOpen: true }),
+  closeCsvModal: () => set({ isCsvModalOpen: false }),
 }));

@@ -1,7 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useStore } from '../store/useStore';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword 
+} from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 import { Lock } from 'lucide-react';
 
 export default function LoginPage() {
@@ -11,61 +16,73 @@ export default function LoginPage() {
   const [gymName, setGymName] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const loginAs = useStore(state => state.loginAs);
-  const signupGym = useStore(state => state.signupGym);
-  const gymAccounts = useStore(state => state.gymAccounts);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true);
 
-    if (isLogin) {
-      // 1. 마스터 관리자 (admin@tapnow.com)
-      if (email === 'admin@tapnow.com') {
-        if (password === 'admin' || password === 'admin1234') {
-          loginAs('SUPER_ADMIN', 'ALL', email, 'TAPNOW 본사');
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (isLogin) {
+        // Firebase Auth 로그인
+        await signInWithEmailAndPassword(auth, normalizedEmail, password);
+
+        // 슈퍼 관리자 특수 처리 (이메일로 구분)
+        const isAdmin = normalizedEmail === 'hjbyun0921@naver.com';
+
+        if (isAdmin) {
           navigate('/superadmin');
         } else {
-          setError('관리자 비밀번호가 틀렸습니다.');
-        }
-        return;
-      }
-
-      // 2. 일반 도장 관리자 검색
-      const foundGym = gymAccounts.find(g => g.ownerEmail === email);
-      if (foundGym) {
-        if (foundGym.ownerPassword === password) {
-          loginAs('GYM_ADMIN', foundGym.id, email, foundGym.gymName);
           navigate('/admin/members');
-        } else {
-          setError('비밀번호가 틀렸습니다.');
         }
-        return;
-      }
+      } else {
+        // 회원가입 로직
+        if (password !== passwordConfirm) {
+          setError('비밀번호가 일치하지 않습니다.');
+          setIsSubmitting(false);
+          return;
+        }
+        
+        const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+        const user = userCredential.user;
 
-      setError('등록되지 않은 계정입니다. 회원가입 후 이용해주세요.');
-    } else {
-      // 3. 회원가입 로직
-      if (!email.includes('@') || password.length < 4 || !gymName) {
-        setError('모든 정보를 올바르게 입력해주세요.');
-        return;
+        // Firestore에 도장 정보 등록
+        await setDoc(doc(db, 'gyms', user.uid), {
+          gymName,
+          ownerEmail: normalizedEmail,
+          registeredAt: new Date().toISOString().split('T')[0],
+          memberCount: 0,
+          plan: 'free',
+          planExpireDate: new Date(new Date().getFullYear() + 1, new Date().getMonth(), new Date().getDate()).toISOString().split('T')[0],
+          status: 'active',
+          memo: '신규 가입',
+          gymPin: '0000',
+          theme: 'dark'
+        });
+
+        // 💡 중요: 회원가입 후에는 수동 이동(navigate)하지 않고 
+        // useStore의 onAuthStateChanged 리스너가 감지할 때까지 대기합니다.
+        // (이것이 더 안정적인 상태 전환을 보장합니다.)
       }
-      if (password !== passwordConfirm) {
-        setError('비밀번호가 일치하지 않습니다.');
-        return;
+    } catch (err: any) {
+      console.error('Auth Error:', err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        setError('등록되지 않은 계정입니다. 회원가입 후 이용해주세요.');
+      } else if (err.code === 'auth/wrong-password') {
+        setError('비밀번호가 올바르지 않습니다.');
+      } else if (err.code === 'auth/email-already-in-use') {
+        setError('이미 사용 중인 이메일입니다.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('비밀번호는 6자리 이상이어야 합니다.');
+      } else {
+        setError('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
       }
-      
-      // 회원가입 처리
-      signupGym(gymName, email, password);
-      
-      // 방금 가입한 계정 정보를 다시 찾아서 로그인 처리
-      const newGym = useStore.getState().gymAccounts.find(g => g.ownerEmail === email);
-      if (newGym) {
-        loginAs('GYM_ADMIN', newGym.id, email, newGym.gymName);
-        navigate('/admin/members');
-      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -94,6 +111,7 @@ export default function LoginPage() {
           <button 
             type="button"
             onClick={() => { setIsLogin(true); setError(''); }}
+            disabled={isSubmitting}
             style={{ 
               background: 'transparent', border: 'none', fontSize: '1.125rem', fontWeight: 700,
               color: isLogin ? 'var(--tertiary)' : 'var(--on-surface-variant)',
@@ -105,6 +123,7 @@ export default function LoginPage() {
           <button 
             type="button"
             onClick={() => { setIsLogin(false); setError(''); }}
+            disabled={isSubmitting}
             style={{ 
               background: 'transparent', border: 'none', fontSize: '1.125rem', fontWeight: 700,
               color: !isLogin ? 'var(--tertiary)' : 'var(--on-surface-variant)',
@@ -121,7 +140,18 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {error && (
-            <div style={{ background: 'rgba(255,180,171,0.1)', color: 'var(--error)', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.875rem' }}>
+            <div style={{ 
+              background: 'rgba(211, 47, 47, 0.15)', 
+              color: '#ffb4ab', 
+              padding: '0.625rem 0.75rem', 
+              borderRadius: '0.5rem', 
+              fontSize: '0.75rem', 
+              textAlign: 'center',
+              border: '1px solid rgba(211, 47, 47, 0.3)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
               {error}
             </div>
           )}
@@ -133,6 +163,7 @@ export default function LoginPage() {
               placeholder="도장 이름 (ex. 주짓수랩 강남)" 
               value={gymName}
               onChange={e => setGymName(e.target.value)}
+              disabled={isSubmitting}
               className="input-field"
               style={{
                 background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)',
@@ -147,6 +178,7 @@ export default function LoginPage() {
             placeholder="이메일" 
             value={email}
             onChange={e => setEmail(e.target.value)}
+            disabled={isSubmitting}
             className="input-field"
             style={{
               background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)',
@@ -159,6 +191,7 @@ export default function LoginPage() {
             placeholder="비밀번호" 
             value={password}
             onChange={e => setPassword(e.target.value)}
+            disabled={isSubmitting}
             className="input-field"
             style={{
               background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)',
@@ -173,6 +206,7 @@ export default function LoginPage() {
               placeholder="비밀번호 확인" 
               value={passwordConfirm}
               onChange={e => setPasswordConfirm(e.target.value)}
+              disabled={isSubmitting}
               className="input-field"
               style={{
                 background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)',
@@ -184,9 +218,10 @@ export default function LoginPage() {
           <button 
             type="submit" 
             className="btn btn-primary"
-            style={{ marginTop: '1rem' }}
+            disabled={isSubmitting}
+            style={{ marginTop: '1rem', position: 'relative' }}
           >
-            {isLogin ? '로그인' : '회원가입'}
+            {isSubmitting ? '처리 중...' : (isLogin ? '로그인' : '회원가입')}
           </button>
         </form>
       </motion.div>

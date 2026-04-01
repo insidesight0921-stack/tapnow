@@ -89,8 +89,8 @@ export default function MembersPage() {
     { key: '전체', label: '전체' },
     { key: '유효', label: '유효' },
     { key: '만료', label: '만료' },
-    { key: '임박', label: `⚠️ 임박 ${expiringCount > 0 ? `(${expiringCount})` : ''}` },
-    { key: '미출석', label: `💤 미출석(2주) ${longAbsentCount > 0 ? `(${longAbsentCount})` : ''}` },
+    { key: '임박', label: `임박 ${expiringCount > 0 ? `(${expiringCount})` : ''}` },
+    { key: '미출석', label: `미출석(2주) ${longAbsentCount > 0 ? `(${longAbsentCount})` : ''}` },
   ];
 
   return (
@@ -127,7 +127,8 @@ export default function MembersPage() {
           overflowX: 'auto', 
           paddingBottom: '0.5rem',
           margin: isMobile ? '0 -1rem' : '0',
-          padding: isMobile ? '0 1rem 0.5rem' : '0 0 0.5rem'
+          padding: isMobile ? '0 1rem 0.5rem' : '0 0 0.5rem',
+          flexShrink: 0
         }} className="no-wrap-group">
           {filterOptions.map(({ key, label }) => (
             <button key={key}
@@ -136,9 +137,9 @@ export default function MembersPage() {
                 background: filter === key ? 'var(--tertiary)' : 'var(--surface-container-high)',
                 color: filter === key ? '#502400' : 'var(--on-surface-variant)',
                 border: filter === key ? 'none' : '1px solid var(--outline-variant)',
-                padding: '0 1rem', 
-                height: '44px',
-                borderRadius: '0.75rem', 
+                padding: '0 0.875rem', 
+                height: '40px',
+                borderRadius: '0.625rem', 
                 fontSize: '0.8125rem',
                 fontWeight: filter === key ? 700 : 500, cursor: 'pointer', transition: 'all 0.2s',
                 whiteSpace: 'nowrap',
@@ -153,7 +154,8 @@ export default function MembersPage() {
           display: 'flex', 
           gap: '0.5rem', 
           alignItems: 'center', 
-          width: '100%'
+          flex: 1,
+          maxWidth: isMobile ? 'none' : '480px'
         }}>
           <button className="btn btn-primary" onClick={() => useStore.getState().openMemberModal()} style={{
             padding: '0 1.25rem', height: '44px', borderRadius: '0.75rem', background: 'var(--tertiary)', color: '#502400', fontWeight: 700, fontSize: '0.875rem', whiteSpace: 'nowrap'

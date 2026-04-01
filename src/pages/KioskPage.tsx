@@ -90,61 +90,64 @@ function KioskCard({ gymName, isMobile }: { gymName: string, isMobile: boolean }
     setStatus('IDLE');
   };
 
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
     if (pin.length !== 4) return;
     setStatus('LOADING');
 
     const phoneLastFour = pin;
     const todayStr = new Date().toISOString().split('T')[0];
 
-    setTimeout(() => {
-      // 해당 도장에서 뒷번호 4자리로 회원 찾기
-      const member = members.find(m =>
-        (m.gymId === gymId || gymId === 'ALL') &&
-        m.phone.replace(/-/g, '').endsWith(phoneLastFour)
-      );
+    // 해당 도장에서 뒷번호 4자리로 회원 찾기
+    const member = members.find(m =>
+      (m.gymId === gymId || gymId === 'ALL') &&
+      m.phone.replace(/-/g, '').endsWith(phoneLastFour)
+    );
 
-      if (!member) {
-        setStatus('NOT_FOUND');
-        return;
-      }
+    if (!member) {
+      setStatus('NOT_FOUND');
+      return;
+    }
 
-      // 오늘 이미 출석했는지 확인
-      if (attendances.some(a => a.memberId === member.id && a.date === todayStr)) {
-        setCheckedName(member.name);
-        setStatus('ALREADY');
-        return;
-      }
-
-      // 횟수권 잔여 횟수 확인
-      const hasTicket = member.plans.some(p => p.type === '횟수권');
-      if (hasTicket) {
-        const totalRemaining = member.plans
-          .filter(p => p.type === '횟수권')
-          .reduce((sum, p) => sum + (p.remainingQty ?? 0), 0);
-        if (totalRemaining <= 0) {
-          setCheckedName(member.name);
-          setStatus('NO_REMAIN');
-          return;
-        }
-      }
-
-      markAttendance(member.id);
+    // 오늘 이미 출석했는지 확인
+    if (attendances.some(a => a.memberId === member.id && a.date === todayStr)) {
       setCheckedName(member.name);
-      
-      const ticketPlans = member.plans.filter(p => p.type === '횟수권');
-      if (ticketPlans.length > 0) {
-        const totalRemaining = ticketPlans.reduce((sum, p) => sum + (p.remainingQty ?? 0), 0);
-        setCheckedMemberInfo({ isTicket: true, remaining: totalRemaining - 1 });
-      } else {
-        setCheckedMemberInfo({ isTicket: false, expireDate: member.expireDate });
-      }
-      
-      setStatus('SUCCESS');
+      setStatus('ALREADY');
+      return;
+    }
 
-      // 3초 후 리셋
-      setTimeout(() => { setStatus('IDLE'); setPin(''); setCheckedMemberInfo(null); }, 3000);
-    }, 600);
+    // 횟수권 잔여 횟수 확인
+    const hasTicket = member.plans.some(p => p.type === '횟수권');
+    if (hasTicket) {
+      const totalRemaining = member.plans
+        .filter(p => p.type === '횟수권')
+        .reduce((sum, p) => sum + (p.remainingQty ?? 0), 0);
+      if (totalRemaining <= 0) {
+        setCheckedName(member.name);
+        setStatus('NO_REMAIN');
+        return;
+      }
+    }
+
+    await markAttendance(member.id);
+    setCheckedName(member.name);
+    
+    const ticketPlans = member.plans.filter(p => p.type === '횟수권');
+    if (ticketPlans.length > 0) {
+      const totalRemaining = ticketPlans.reduce((sum, p) => sum + (p.remainingQty ?? 0), 0);
+      // markAttendance에서 이미 차감되었으므로 UI에는 -1된 값을 보여줌
+      setCheckedMemberInfo({ isTicket: true, remaining: totalRemaining - 1 });
+    } else {
+      setCheckedMemberInfo({ isTicket: false, expireDate: member.expireDate });
+    }
+    
+    setStatus('SUCCESS');
+
+    // 3초 후 리셋
+    setTimeout(() => { 
+      setStatus('IDLE'); 
+      setPin(''); 
+      setCheckedMemberInfo(null); 
+    }, 3000);
   };
 
   return (

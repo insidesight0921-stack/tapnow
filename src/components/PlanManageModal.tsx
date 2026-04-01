@@ -19,6 +19,7 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
     name: '', price: 0, months: 1, type: '기간권', defaultQty: 0 
   });
   const [isAdding, setIsAdding] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   useEffect(() => {
@@ -36,16 +37,19 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
     setIsAdding(false);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (editingPlanId) {
-      updatePlan(editingPlanId, formData);
+      setIsSubmitting(true);
+      await updatePlan(editingPlanId, formData);
       setEditingPlanId(null);
+      setIsSubmitting(false);
     }
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addPlan({ 
+    setIsSubmitting(true);
+    await addPlan({ 
       name: formData.name, 
       price: Number(formData.price), 
       months: Number(formData.months),
@@ -53,7 +57,16 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
       defaultQty: formData.type === '횟수권' ? Number(formData.defaultQty) : undefined
     });
     setIsAdding(false);
+    setIsSubmitting(false);
     setFormData({ name: '', price: 0, months: 1, type: '기간권', defaultQty: 0 });
+  };
+
+  const handleDeletePlan = async (id: string) => {
+    if (window.confirm('이 요금제를 삭제하시겠습니까?')) {
+      setIsSubmitting(true);
+      await deletePlan(id);
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -114,8 +127,10 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
                           )}
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
-                          <button onClick={handleSaveEdit} className="btn-primary" style={{ height: '36px', padding: '0 1rem', borderRadius: 'var(--radius-sm)', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}>저장</button>
-                          <button onClick={() => setEditingPlanId(null)} style={{ padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={18} /></button>
+                          <button onClick={handleSaveEdit} disabled={isSubmitting} className="btn-primary" style={{ height: '36px', padding: '0 1rem', borderRadius: 'var(--radius-sm)', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}>
+                            {isSubmitting ? '...' : '저장'}
+                          </button>
+                          <button onClick={() => setEditingPlanId(null)} disabled={isSubmitting} style={{ padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={18} /></button>
                         </div>
                       </div>
                     ) : (
@@ -127,8 +142,8 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
                           </span>
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <button onClick={() => handleEditClick(p)} style={{ background: 'transparent', border: 'none', color: 'var(--tertiary)', cursor: 'pointer', padding: '0.5rem' }}><Edit2 size={18}/></button>
-                          <button onClick={() => deletePlan(p.id)} style={{ background: 'transparent', border: 'none', color: 'var(--error)', cursor: 'pointer', padding: '0.5rem' }}><Trash2 size={18}/></button>
+                          <button onClick={() => handleEditClick(p)} disabled={isSubmitting} style={{ background: 'transparent', border: 'none', color: 'var(--tertiary)', cursor: 'pointer', padding: '0.5rem' }}><Edit2 size={18}/></button>
+                          <button onClick={() => handleDeletePlan(p.id)} disabled={isSubmitting} style={{ background: 'transparent', border: 'none', color: 'var(--error)', cursor: 'pointer', padding: '0.5rem' }}><Trash2 size={18}/></button>
                         </div>
                       </>
                     )}
@@ -160,9 +175,11 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
                         </div>
                       )}
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
-                      <button type="submit" style={{ height: '36px', padding: '0 1.25rem', background: 'var(--tertiary)', color: '#502400', borderRadius: 'var(--radius-sm)', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem' }}>저장</button>
-                      <button type="button" onClick={() => setIsAdding(false)} style={{ padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={18}/></button>
+                     <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                      <button type="submit" disabled={isSubmitting} style={{ height: '36px', padding: '0 12.5rem', background: 'var(--tertiary)', color: '#502400', borderRadius: 'var(--radius-sm)', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem' }}>
+                        {isSubmitting ? '처리 중...' : '저장'}
+                      </button>
+                      <button type="button" onClick={() => setIsAdding(false)} disabled={isSubmitting} style={{ padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={18}/></button>
                     </div>
                   </form>
                 )}

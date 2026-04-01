@@ -9,15 +9,12 @@ import AttendancePage from './pages/AttendancePage';
 import PaymentPage from './pages/PaymentPage';
 import SuperAdminPage from './pages/SuperAdminPage';
 
-
-
 // 일반 도장 관리자 전용 가드
 const GymAdminRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuth = useStore((state) => state.isAuthenticated);
   const role = useStore((state) => state.userRole);
   
   if (!isAuth) return <Navigate to="/login" replace />;
-  // 만약 통합 관리자 계정이라면 도장 화면 진입 시 통제 (혹은 허용 가능 설계에 따라)
   if (role === 'SUPER_ADMIN') return <Navigate to="/superadmin" replace />;
   
   return <>{children}</>;
@@ -33,7 +30,14 @@ const SuperAdminRoute = ({ children }: { children: React.ReactNode }) => {
 
 function App() {
   const theme = useStore(state => state.theme);
+  const isLoading = useStore(state => state.isLoading);
+  const init = useStore(state => state.init);
   
+  useEffect(() => {
+    const unsub = init();
+    return () => unsub();
+  }, [init]);
+
   useEffect(() => {
     if (theme === 'light') {
       document.body.classList.add('light-theme');
@@ -41,6 +45,17 @@ function App() {
       document.body.classList.remove('light-theme');
     }
   }, [theme]);
+
+  if (isLoading) {
+    return (
+      <div style={{ 
+        height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+        background: 'var(--bg-color)', color: 'var(--on-surface)' 
+      }}>
+        <div className="loading-spinner"></div>
+      </div>
+    );
+  }
 
   return (
     <Routes>

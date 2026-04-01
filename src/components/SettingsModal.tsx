@@ -40,6 +40,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newPin, setNewPin] = useState(gymPin);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [accountMsg, setAccountMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -50,8 +51,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
-  const handleSaveGeneral = () => {
-    updateSettings(currentTheme, logoPreview);
+  const handleSaveGeneral = async () => {
+    setIsSubmitting(true);
+    await updateSettings(currentTheme, logoPreview);
+    setIsSubmitting(false);
     onClose();
   };
 
@@ -66,7 +69,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setTimeout(() => setAccountMsg(null), 3000);
   };
 
-  const handlePasswordChange = () => {
+  const handlePasswordChange = async () => {
     if (newPassword.length < 4) {
       setAccountMsg({ type: 'error', text: '비밀번호는 4자 이상이어야 합니다.' });
       return;
@@ -75,25 +78,36 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setAccountMsg({ type: 'error', text: '비밀번호가 일치하지 않습니다.' });
       return;
     }
-    updatePassword(newPassword);
-    setNewPassword('');
-    setConfirmPassword('');
-    setAccountMsg({ type: 'success', text: '비밀번호가 변경되었습니다.' });
-    setTimeout(() => setAccountMsg(null), 3000);
+    setIsSubmitting(true);
+    try {
+      await updatePassword(newPassword);
+      setNewPassword('');
+      setConfirmPassword('');
+      setAccountMsg({ type: 'success', text: '비밀번호가 변경되었습니다.' });
+    } catch (err) {
+      setAccountMsg({ type: 'error', text: '비밀번호 변경 중 오류가 발생했습니다.' });
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setAccountMsg(null), 3000);
+    }
   };
 
-  const handlePinChange = () => {
+  const handlePinChange = async () => {
     if (!/^\d{4}$/.test(newPin)) {
       setAccountMsg({ type: 'error', text: 'PIN은 숫자 4자리여야 합니다.' });
       return;
     }
-    updatePin(newPin);
+    setIsSubmitting(true);
+    await updatePin(newPin);
+    setIsSubmitting(false);
     setAccountMsg({ type: 'success', text: '키오스크 PIN이 변경되었습니다.' });
     setTimeout(() => setAccountMsg(null), 3000);
   };
 
-  const handleDeleteAccount = () => {
-    deleteAccount();
+  const handleDeleteAccount = async () => {
+    setIsSubmitting(true);
+    await deleteAccount();
+    setIsSubmitting(false);
     onClose();
   };
 
@@ -256,7 +270,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             <div style={{ padding: isMobile ? '1rem 1.25rem' : '1rem 1.5rem', borderTop: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexShrink: 0 }}>
               <button onClick={onClose} style={{ flex: isMobile ? 1 : 'unset', height: '44px', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.75rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>닫기</button>
               {activeTab === 'general' && (
-                <button onClick={handleSaveGeneral} style={{ flex: isMobile ? 1 : 'unset', height: '44px', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '0.75rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>저장</button>
+                <button onClick={handleSaveGeneral} disabled={isSubmitting} style={{ flex: isMobile ? 1 : 'unset', height: '44px', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '0.75rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>
+                  {isSubmitting ? '저장 중...' : '저장'}
+                </button>
               )}
             </div>
           </motion.div>
