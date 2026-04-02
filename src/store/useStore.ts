@@ -77,13 +77,15 @@ export interface GymAccount {
 
 export interface Payment {
   id: string;
-  memberId: string;
-  memberName: string;
+  gymId: string;
+  memberId?: string;
+  memberName?: string;
   amount: number;
-  method: '카드' | '현금' | '계좌이체' | '기타';
-  planName: string;
+  method: '카드' | '현금' | '계좌이체' | '기타' | 'toss';
+  planName?: string;
+  item?: string;
   date: string;
-  status: '완료' | '미납';
+  status: '완료' | '미납' | 'paid';
 }
 
 interface AppData {
@@ -360,15 +362,44 @@ export const useStore = create<AppState>((set, get) => ({
 
   addPlan: async (plan) => {
     const { gymId } = get();
-    await addDoc(collection(db, 'plans'), { ...plan, gymId });
+    if (!gymId) throw new Error('로그인 정보가 없습니다.');
+    try {
+      // undefined 필드 제거
+      const cleanData = Object.fromEntries(
+        Object.entries(plan).filter(([_, v]) => v !== undefined)
+      );
+      
+      await addDoc(collection(db, 'plans'), { 
+        ...cleanData, 
+        gymId,
+        createdAt: serverTimestamp() 
+      });
+    } catch (err) {
+      console.error('Plan add error:', err);
+      throw err;
+    }
   },
 
   updatePlan: async (id, updatedFields) => {
-    await updateDoc(doc(db, 'plans', id), updatedFields);
+    try {
+      // id 제외 및 undefined 필드 제거
+      const cleanData = Object.fromEntries(
+        Object.entries(updatedFields).filter(([k, v]) => k !== 'id' && v !== undefined)
+      );
+      await updateDoc(doc(db, 'plans', id), cleanData);
+    } catch (err) {
+      console.error('Plan update error:', err);
+      throw err;
+    }
   },
 
   deletePlan: async (id) => {
-    await deleteDoc(doc(db, 'plans', id));
+    try {
+      await deleteDoc(doc(db, 'plans', id));
+    } catch (err) {
+      console.error('Plan delete error:', err);
+      throw err;
+    }
   },
 
   markAttendance: async (memberId) => {

@@ -34,8 +34,6 @@ export default function MembersPage() {
     .filter(p => gymMembers.some(m => m.id === p.memberId) && p.date.startsWith(thisMonthPrefix) && p.status === '완료')
     .reduce((sum, p) => sum + p.amount, 0);
 
-  // 이번 달 신규 회원
-  const newThisMonth = gymMembers.filter(m => m.registerDate?.startsWith(thisMonthPrefix)).length;
 
   // 장기 미출석 (14일 이상)
   const longAbsentCount = gymMembers.filter(m => {
@@ -80,7 +78,6 @@ export default function MembersPage() {
     { label: '유효 회원', value: activeCount, color: '#52b788' },
     { label: '만료 회원', value: expiredCount, color: 'var(--error)' },
     { label: '이번 달 매출', value: `${thisMonthRevenue.toLocaleString()}원`, color: 'var(--primary)', small: true },
-    { label: '이번 달 신규', value: `${newThisMonth}명`, color: '#52b788', small: true },
     { label: '만료 임박', value: `${expiringCount}명`, color: '#ffb700', small: true, highlight: expiringCount > 0 },
     { label: '장기 미출석 (2주)', value: `${longAbsentCount}명`, color: 'var(--on-surface-variant)', small: true },
   ];

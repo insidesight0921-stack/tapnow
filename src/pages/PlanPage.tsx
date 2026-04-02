@@ -96,8 +96,8 @@ export default function PlanPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-color)', color: 'var(--on-bg)', padding: 'var(--space-12)' }}>
-      <header style={{ maxWidth: '1000px', margin: '0 auto 4rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+    <div style={{ padding: '0 0.5rem' }}>
+      <header style={{ maxWidth: '1000px', margin: '0 auto 3rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
         <button 
           onClick={() => navigate(-1)}
           className="glass-panel"

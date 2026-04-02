@@ -106,12 +106,10 @@ export default function PaymentPage() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const payments = useStore(state => state.members.length > 0 ? state.payments : []); 
-  const members = useStore(state => state.members);
+  const payments = useStore(state => state.payments); 
   const currentGymId = useStore(state => state.gymId); 
   
-  const gymMembers = members.filter(m => m.gymId === currentGymId);
-  const gymPayments = payments.filter(p => gymMembers.some(m => m.id === p.memberId));
+  const gymPayments = payments.filter(p => p.gymId === currentGymId);
 
   const [monthFilter, setMonthFilter] = useState(() => new Date().toISOString().slice(0, 7));
   const [methodFilter, setMethodFilter] = useState<'전체' | '카드' | '현금' | '계좌이체' | '기타'>('전체');
@@ -122,7 +120,7 @@ export default function PaymentPage() {
     if (!p.date.startsWith(monthFilter)) return false;
     if (methodFilter !== '전체' && p.method !== methodFilter) return false;
     if (statusFilter !== '전체' && p.status !== statusFilter) return false;
-    if (search && !p.memberName.includes(search)) return false;
+    if (search && !(p.memberName?.includes(search) || p.item?.includes(search))) return false;
     return true;
   });
 
@@ -224,9 +222,9 @@ export default function PaymentPage() {
                 onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-container-highest)'}
                 onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
               >
-                <td style={{ padding: '1rem', fontWeight: 600 }}>{p.memberName}</td>
+                <td style={{ padding: '1rem', fontWeight: 600 }}>{p.memberName || p.item || '구독 결제'}</td>
                 <td style={{ padding: '1rem', color: 'var(--on-surface-variant)' }}>{p.date}</td>
-                <td style={{ padding: '1rem', color: 'var(--on-surface-variant)' }}>{p.planName}</td>
+                <td style={{ padding: '1rem', color: 'var(--on-surface-variant)' }}>{p.planName || p.item || '-'}</td>
                 <td style={{ padding: '1rem', fontWeight: 600, color: 'var(--on-surface)', textAlign: 'right' }}>{p.amount.toLocaleString()}원</td>
                 <td style={{ padding: '1rem', textAlign: 'center' }}>
                   <span style={{ background: 'var(--surface-container-highest)', padding: '0.125rem 0.625rem', borderRadius: '12px', fontSize: '0.75rem' }}>{p.method}</span>

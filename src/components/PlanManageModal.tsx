@@ -40,25 +40,50 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
   const handleSaveEdit = async () => {
     if (editingPlanId) {
       setIsSubmitting(true);
-      await updatePlan(editingPlanId, formData);
-      setEditingPlanId(null);
-      setIsSubmitting(false);
+      try {
+        const { name, price, months, type, defaultQty } = formData;
+        if (!name.trim()) throw new Error('요금제명을 입력해 주세요.');
+        
+        await updatePlan(editingPlanId, { 
+          name: name.trim(), 
+          price: Number(price), 
+          months: Number(months), 
+          type, 
+          defaultQty: type === '횟수권' ? Number(defaultQty) : undefined 
+        });
+        alert('요금제 정보가 수정되었습니다.');
+        setEditingPlanId(null);
+      } catch (err: any) {
+        console.error('Save edit error:', err);
+        alert('저장에 실패했습니다: ' + (err.message || '알 수 없는 오류'));
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.name.trim()) return;
+    
     setIsSubmitting(true);
-    await addPlan({ 
-      name: formData.name, 
-      price: Number(formData.price), 
-      months: Number(formData.months),
-      type: formData.type,
-      defaultQty: formData.type === '횟수권' ? Number(formData.defaultQty) : undefined
-    });
-    setIsAdding(false);
-    setIsSubmitting(false);
-    setFormData({ name: '', price: 0, months: 1, type: '기간권', defaultQty: 0 });
+    try {
+      await addPlan({ 
+        name: formData.name.trim(), 
+        price: Number(formData.price), 
+        months: Number(formData.months),
+        type: formData.type,
+        defaultQty: formData.type === '횟수권' ? Number(formData.defaultQty) : undefined
+      });
+      alert('새 요금제가 추가되었습니다.');
+      setIsAdding(false);
+      setFormData({ name: '', price: 0, months: 1, type: '기간권', defaultQty: 0 });
+    } catch (err: any) {
+      console.error('Add plan error:', err);
+      alert('요금제 추가에 실패했습니다: ' + (err.message || '알 수 없는 오류'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDeletePlan = async (id: string) => {
@@ -176,7 +201,7 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
                       )}
                     </div>
                      <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
-                      <button type="submit" disabled={isSubmitting} style={{ height: '36px', padding: '0 12.5rem', background: 'var(--tertiary)', color: '#502400', borderRadius: 'var(--radius-sm)', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem' }}>
+                      <button type="submit" disabled={isSubmitting} style={{ height: '36px', width: '100%', background: 'var(--tertiary)', color: '#502400', borderRadius: 'var(--radius-sm)', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem' }}>
                         {isSubmitting ? '처리 중...' : '저장'}
                       </button>
                       <button type="button" onClick={() => setIsAdding(false)} disabled={isSubmitting} style={{ padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={18}/></button>
