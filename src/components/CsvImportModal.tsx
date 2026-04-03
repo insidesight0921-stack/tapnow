@@ -94,12 +94,16 @@ export default function CsvImportModal() {
       });
     } else if (isXlsx) {
       try {
-        const data = await file.arrayBuffer();
-        const workbook = XLSX.read(data, { type: 'array' });
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
+        
+        // 헤더만 명시적으로 추출 (데이터가 없는 열도 포함하기 위함)
+        const headerRow = XLSX.utils.sheet_to_json(worksheet, { header: 1 })[0] as string[];
         const json = XLSX.utils.sheet_to_json(worksheet);
-        processParsedData(json);
+        
+        processParsedData(json, headerRow);
       } catch (err: any) {
         setError(`엑셀 파싱 오류: ${err.message}`);
       }
@@ -108,13 +112,14 @@ export default function CsvImportModal() {
     }
   };
 
-  const processParsedData = (data: any[]) => {
+  const processParsedData = (data: any[], customHeaders?: string[]) => {
     if (data.length === 0) {
       setError('파일에 데이터가 없습니다.');
       return;
     }
     
-    const csvHeaders = Object.keys(data[0] as any);
+    // customHeaders가 있으면 사용, 없으면 데이터의 키값 사용
+    const csvHeaders = customHeaders || Object.keys(data[0] as any);
     setCsvData(data);
     setHeaders(csvHeaders);
     
@@ -122,7 +127,7 @@ export default function CsvImportModal() {
     const initialMapping: Record<string, string> = {};
     Object.entries(EXPECTED_FIELDS).forEach(([sysField, synonyms]) => {
       const matched = csvHeaders.find(h => 
-        synonyms.some(s => h.toLowerCase().includes(s.toLowerCase()))
+        h && synonyms.some(s => h.toString().toLowerCase().includes(s.toLowerCase()))
       );
       if (matched) initialMapping[sysField] = matched;
     });
@@ -242,7 +247,7 @@ export default function CsvImportModal() {
             <div style={{ padding: '1.75rem 1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <FileText color="var(--tertiary)" size={28} />
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>회원 데이터 복구 (엑셀/CSV)</h2>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>회원 데이터 복구</h2>
               </div>
               <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', padding: '0.5rem' }}><X size={32} /></button>
             </div>
