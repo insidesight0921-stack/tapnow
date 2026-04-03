@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Upload, FileText, CheckCircle, AlertCircle, HelpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
@@ -36,6 +36,19 @@ export default function CsvImportModal() {
   
   const { gymId, plans, addMember } = useStore();
 
+  // 모달이 닫힐 때 상태 초기화 (사용자 요구사항)
+  useEffect(() => {
+    if (!isOpen) {
+      setStep('upload');
+      setCsvData([]);
+      setHeaders([]);
+      setFieldMapping({});
+      setError('');
+      setImportResults({ success: 0, failed: 0 });
+      setDebugLog('');
+    }
+  }, [isOpen]);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -49,18 +62,30 @@ export default function CsvImportModal() {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const data = event.target?.result;
+      const data = event.target?.result as ArrayBuffer;
       if (!data) {
         setError('파일 데이터를 읽을 수 없습니다.');
         return;
       }
 
       if (isCsv) {
-        const decoder = new TextDecoder('utf-8');
-        const csvString = decoder.decode(data as ArrayBuffer);
+        // 인코딩 자동 감지 로직 (한글 깨짐 방지)
+        const utf8Decoder = new TextDecoder('utf-8');
+        let csvString = utf8Decoder.decode(data);
+        
+        // 깨진 문자(?)가 포함되어 있는지 확인 (Replacement Character \uFFFD)
+        const replacementCharCount = (csvString.match(/\uFFFD/g) || []).length;
+        if (replacementCharCount > 3) {
+          const eucDecoder = new TextDecoder('euc-kr');
+          csvString = eucDecoder.decode(data);
+          setDebugLog(prev => `${prev}\n인코딩 자동 감지: EUC-KR(한글) 적용`);
+        } else {
+          setDebugLog(prev => `${prev}\n인코딩 자동 감지: UTF-8 적용`);
+        }
+
         Papa.parse(csvString, {
           header: false,
-          skipEmptyLines: true,
+          skipEmptyLines: 'greedy',
           complete: (results: any) => findHeadersAndProcess(results.data),
           error: (err: any) => setError(`CSV 파싱 오류: ${err.message}`)
         });
@@ -90,40 +115,56 @@ export default function CsvImportModal() {
       return;
     }
 
-    // 지능형 헤더 탐지: 상위 10행 중 가장 많은 값을 가진 행을 헤더로 간주
+    // 헤더 탐지 알고리즘 강화: 키워드 매칭 점수제 도입
     let headerIdx = -1;
-    let maxCols = 0;
+    let maxScore = -1;
     
-    for (let i = 0; i < Math.min(allRows.length, 10); i++) {
+    const allKeywords = Object.values(EXPECTED_FIELDS).flat();
+
+    for (let i = 0; i < Math.min(allRows.length, 12); i++) {
       const row = allRows[i];
-      if (!row) continue;
+      if (!row || row.length === 0) continue;
+      
       const nonNullCols = row.filter(cell => cell !== null && cell !== undefined && cell !== "").length;
-      if (nonNullCols > maxCols) {
-        maxCols = nonNullCols;
+      let keywordScore = 0;
+      
+      row.forEach(cell => {
+        if (!cell) return;
+        const cellStr = cell.toString().toLowerCase().replace(/\s/g, '');
+        if (allKeywords.some(kw => {
+          const cleanKw = kw.toLowerCase().replace(/\s/g, '');
+          return cellStr === cleanKw || cellStr.includes(cleanKw);
+        })) {
+          keywordScore += 10; // 키워드 일치 시 높은 가점
+        }
+      });
+
+      // 최종 점수: 데이터 존재 열 개수 + 키워드 매칭 보너스
+      const totalRowScore = nonNullCols + keywordScore;
+      if (totalRowScore > maxScore && nonNullCols > 0) {
+        maxScore = totalRowScore;
         headerIdx = i;
       }
     }
 
-    if (headerIdx === -1 || maxCols === 0) {
-      setError('유효한 데이터 헤더를 찾을 수 없습니다.');
+    if (headerIdx === -1) {
+      setError('유효한 데이터 형식을 찾을 수 없습니다.');
       return;
     }
 
     const rawHeaders = allRows[headerIdx].map(h => h?.toString().trim() || "");
     const dataRows = allRows.slice(headerIdx + 1);
 
-    setDebugLog(prev => `${prev}\n탐지된 헤더: ${rawHeaders.join(', ')}\n데이터 행 수: ${dataRows.length}`);
+    setDebugLog(prev => `${prev}\n최적 헤더 행 찾음 (행 번호: ${headerIdx + 1})\n탐지된 필드: ${rawHeaders.filter(h => h).join(', ')}`);
 
-    // 데이터 변환 (헤더를 키로 하는 객체 배열로)
     const formattedData = dataRows.map(row => {
       const obj: any = {};
       rawHeaders.forEach((header, idx) => {
-        if (header) {
-          obj[header] = row[idx];
-        }
+        if (header) obj[header] = row[idx];
       });
       return obj;
     }).filter(obj => {
+      // 행에 최소한 하나 이상의 데이터가 있는 경우만 유지
       return Object.values(obj).some(val => val !== null && val !== undefined && val !== "");
     });
 
@@ -141,7 +182,7 @@ export default function CsvImportModal() {
         const cleanH = h.toString().toLowerCase().replace(/\s/g, '');
         return synonyms.some(s => {
           const cleanS = s.toLowerCase().replace(/\s/g, '');
-          return cleanH.includes(cleanS) || cleanS.includes(cleanH);
+          return cleanH === cleanS || cleanH.includes(cleanS) || cleanS.includes(cleanH);
         });
       });
       if (matched) initialMapping[sysField] = matched;
@@ -158,6 +199,7 @@ export default function CsvImportModal() {
       return;
     }
     setStep('preview');
+    setError('');
   };
 
   const handleImport = async () => {
@@ -201,8 +243,12 @@ export default function CsvImportModal() {
           memo: row[fieldMapping.memo]?.toString() || ''
         };
 
-        await addMember(newMember);
-        success++;
+        if (newMember.name && newMember.phone) {
+          await addMember(newMember);
+          success++;
+        } else {
+          failed++;
+        }
       } catch (err) {
         console.error('Import individual error:', err);
         failed++;
@@ -229,10 +275,10 @@ export default function CsvImportModal() {
 
             <div style={{ padding: '2rem' }}>
               {error && (
-                <div style={{ padding: '1rem', backgroundColor: 'rgba(255, 82, 82, 0.1)', border: '1px solid #FF5252', borderRadius: '0.75rem', color: '#FF5252', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '1rem', backgroundColor: 'rgba(255, 82, 82, 0.1)', border: '1px solid #FF5252', borderRadius: '0.75rem', color: '#FF5252', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <AlertCircle size={20} />
-                  <span>{error}</span>
-                </div>
+                  <span style={{ fontWeight: 600 }}>{error}</span>
+                </motion.div>
               )}
 
               {step === 'upload' && (
@@ -241,7 +287,8 @@ export default function CsvImportModal() {
                   <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>엑셀 또는 CSV 파일 업로드</h3>
                   <p style={{ color: 'var(--on-surface-variant)', marginBottom: '2rem' }}>엑셀(.xlsx, .xls) 또는 CSV 파일을 선택하세요.</p>
                   
-                  <label style={{ display: 'inline-flex', padding: '0.875rem 2rem', backgroundColor: 'var(--primary)', color: 'var(--on-primary)', borderRadius: '100px', fontWeight: 600, cursor: 'pointer', gap: '0.5rem', alignItems: 'center' }}>
+                  <label style={{ display: 'inline-flex', padding: '1rem 2.5rem', backgroundColor: 'var(--primary)', color: '#FFFFFF', borderRadius: '100px', fontWeight: 700, cursor: 'pointer', gap: '0.75rem', alignItems: 'center', boxShadow: '0 8px 16px rgba(0,0,0,0.2)', transition: 'all 0.2s' }}>
+                    <Upload size={20} />
                     파일 선택
                     <input type="file" accept=".csv, .xlsx, .xls" onChange={handleFileUpload} style={{ display: 'none' }} />
                   </label>
@@ -250,15 +297,18 @@ export default function CsvImportModal() {
 
               {step === 'mapping' && (
                 <div>
-                  <p style={{ marginBottom: '1.5rem', color: 'var(--on-surface-variant)' }}>파일의 각 열이 시스템의 어떤 정보인지 확인해 주세요.</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.25rem', maxHeight: '400px', overflowY: 'auto', padding: '0.5rem' }}>
+                  <p style={{ marginBottom: '1.5rem', color: 'var(--on-surface-variant)', fontSize: '1rem' }}>파일의 각 열이 시스템의 어떤 정보인지 매핑해 주세요.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.25rem', maxHeight: '400px', overflowY: 'auto', padding: '0.5rem', border: '1px solid var(--outline-variant)', borderRadius: '1rem', backgroundColor: 'rgba(0,0,0,0.1)' }}>
                     {Object.keys(EXPECTED_FIELDS).map(sysField => (
-                      <div key={sysField} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--on-surface-variant)', marginLeft: '0.25rem' }}>{EXPECTED_FIELDS[sysField][0]}</span>
+                      <div key={sysField} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', backgroundColor: 'var(--surface-container)', borderRadius: '0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--on-surface)' }}>{EXPECTED_FIELDS[sysField][0]}</span>
+                          {(sysField === 'name' || sysField === 'phone') && <span style={{ color: '#FF5252', fontSize: '0.75rem' }}>(필수)</span>}
+                        </div>
                         <select 
                           value={fieldMapping[sysField] || ''} 
                           onChange={(e) => setFieldMapping(prev => ({ ...prev, [sysField]: e.target.value }))}
-                          style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.75rem', backgroundColor: 'var(--surface-container-highest)', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)' }}
+                          style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.75rem', backgroundColor: 'var(--surface-container-highest)', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', fontSize: '0.95rem' }}
                         >
                           <option value="">-- 선택 안함 --</option>
                           {headers.map(h => <option key={h} value={h}>{h}</option>)}
@@ -268,15 +318,15 @@ export default function CsvImportModal() {
                   </div>
 
                   <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <button onClick={() => setStep('upload')} style={{ color: 'var(--on-surface-variant)', background: 'transparent', border: 'none', cursor: 'pointer' }}>다른 파일 선택</button>
-                    <button onClick={handleApplyMapping} style={{ padding: '0.875rem 2rem', backgroundColor: 'var(--primary-container)', color: 'var(--on-primary-container)', borderRadius: '100px', fontWeight: 600, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      다음 단계 <CheckCircle size={18} />
+                    <button onClick={() => setStep('upload')} style={{ color: 'var(--on-surface-variant)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 600 }}>다른 파일 선택</button>
+                    <button onClick={handleApplyMapping} style={{ padding: '0.875rem 2rem', backgroundColor: 'var(--primary-container)', color: 'var(--on-primary-container)', borderRadius: '100px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      검토 단계로 <CheckCircle size={18} />
                     </button>
                   </div>
 
-                  <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '0.5rem', fontSize: '0.75rem', color: 'var(--outline)', whiteSpace: 'pre-wrap', border: '1px solid var(--outline-variant)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontWeight: 700 }}>
-                      <HelpCircle size={14} /> 시스템 분석 정보
+                  <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: '0.75rem', fontSize: '0.8rem', color: 'var(--outline)', whiteSpace: 'pre-wrap', border: '1px solid var(--outline-variant)', fontFamily: 'monospace' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontWeight: 700, color: 'var(--tertiary)' }}>
+                      <HelpCircle size={14} /> AI 파일 분석 로그
                     </div>
                     {debugLog}
                   </div>
@@ -288,26 +338,30 @@ export default function CsvImportModal() {
                   <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(var(--primary-rgb), 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
                     <FileText size={40} color="var(--primary)" />
                   </div>
-                  <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>데이터 가져오기 준비 완료</h3>
-                  <p style={{ color: 'var(--on-surface-variant)', marginBottom: '2rem' }}>총 <strong>{csvData.length}명</strong>의 회원 데이터를 시스템에 등록합니다.<br />계속하시겠습니까?</p>
+                  <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem', fontWeight: 700 }}>데이터 가져오기 준비 완료</h3>
+                  <p style={{ color: 'var(--on-surface-variant)', marginBottom: '2.5rem', lineHeight: 1.6 }}>총 <strong style={{ color: 'var(--primary)', fontSize: '1.25rem' }}>{csvData.length}명</strong>의 회원 데이터를 시스템에 등록합니다.<br />기존 데이터는 유지되며 새로운 회원이 추가됩니다.</p>
                   
-                  <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                    <button onClick={() => setStep('mapping')} style={{ padding: '0.875rem 2rem', backgroundColor: 'transparent', border: '1px solid var(--outline-variant)', borderRadius: '100px', fontWeight: 600 }}>이전으로</button>
-                    <button onClick={handleImport} style={{ padding: '0.875rem 2rem', backgroundColor: 'var(--primary)', color: 'var(--on-primary)', border: 'none', borderRadius: '100px', fontWeight: 600 }}>지금 가져오기</button>
+                  <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center' }}>
+                    <button onClick={() => setStep('mapping')} style={{ padding: '1rem 2.5rem', backgroundColor: 'transparent', border: '1px solid var(--outline-variant)', borderRadius: '100px', fontWeight: 600, color: 'var(--on-surface)' }}>이전 단계</button>
+                    <button onClick={handleImport} style={{ padding: '1rem 3rem', backgroundColor: 'var(--primary)', color: '#FFFFFF', border: 'none', borderRadius: '100px', fontWeight: 700, boxShadow: '0 8px 20px rgba(var(--primary-rgb), 0.3)' }}>지금 복구하기</button>
                   </div>
                 </div>
               )}
 
               {step === 'success' && (
                 <div style={{ textAlign: 'center', padding: '2rem' }}>
-                  <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(76, 175, 80, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
-                    <CheckCircle size={50} color="#4CAF50" />
+                  <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: 'rgba(76, 175, 80, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+                    <CheckCircle size={60} color="#4CAF50" />
                   </div>
-                  <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>복구 완료</h3>
-                  <p style={{ color: 'var(--on-surface-variant)', marginBottom: '0.5rem' }}>회원 데이터 복구를 성공적으로 마쳤습니다.</p>
-                  <p style={{ fontSize: '1.125rem', marginBottom: '2rem' }}>성공: <span style={{ color: '#4CAF50', fontWeight: 700 }}>{importResults.success}건</span> / 실패: <span style={{ color: '#FF5252', fontWeight: 700 }}>{importResults.failed}건</span></p>
-                  
-                  <button onClick={onClose} style={{ padding: '0.875rem 3rem', backgroundColor: 'var(--primary)', color: 'var(--on-primary)', border: 'none', borderRadius: '100px', fontWeight: 600 }}>닫기</button>
+                  <h3 style={{ fontSize: '1.75rem', marginBottom: '1rem', fontWeight: 800 }}>복구 성공!</h3>
+                  <p style={{ color: 'var(--on-surface-variant)', marginBottom: '1rem' }}>회원 데이터를 안전하게 불러왔습니다.</p>
+                  <div style={{ backgroundColor: 'var(--surface-container)', padding: '1.5rem', borderRadius: '1rem', marginBottom: '2.5rem', display: 'inline-block', minWidth: '200px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>성공:</span><span style={{ color: '#4CAF50', fontWeight: 800 }}>{importResults.success}건</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>실패:</span><span style={{ color: '#FF5252', fontWeight: 800 }}>{importResults.failed}건</span></div>
+                  </div>
+                  <div>
+                    <button onClick={onClose} style={{ padding: '1rem 4rem', backgroundColor: 'var(--primary)', color: '#FFFFFF', border: 'none', borderRadius: '100px', fontWeight: 700 }}>대시보드로 돌아가기</button>
+                  </div>
                 </div>
               )}
             </div>
