@@ -144,7 +144,7 @@ export default function AttendancePage() {
                 {m.plans.some(p => p.name.includes('회권')) ? '횟수권' : '기간권'}
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: m.plans.some(p => p.type === '횟수권') ? '1fr 1fr 1fr' : '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
                <div>
                  <div style={{ fontSize: '0.6875rem', color: 'var(--on-surface-variant)', marginBottom: '0.25rem' }}>오늘 출석</div>
                  <div style={{ fontSize: '1rem', fontWeight: 700, color: hasAttendedToday ? '#52b788' : 'var(--on-surface-variant)' }}>
@@ -155,6 +155,14 @@ export default function AttendancePage() {
                  <div style={{ fontSize: '0.6875rem', color: 'var(--on-surface-variant)', marginBottom: '0.25rem' }}>이달 누적</div>
                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#52b788' }}>{thisMonthCount}회</div>
                </div>
+               {m.plans.some(p => p.type === '횟수권') && (
+                 <div>
+                   <div style={{ fontSize: '0.6875rem', color: 'var(--on-surface-variant)', marginBottom: '0.25rem' }}>남은 횟수</div>
+                   <div style={{ fontSize: '1rem', fontWeight: 700, color: (m.plans.find(p => p.type === '횟수권')?.remainingQty ?? 0) > 0 ? 'var(--tertiary)' : 'var(--error)' }}>
+                     {m.plans.find(p => p.type === '횟수권')?.remainingQty ?? 0}회
+                   </div>
+                 </div>
+               )}
             </div>
             <button style={{ width: '100%', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', height: '44px', borderRadius: '0.75rem', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.875rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             onMouseOver={(e) => { e.currentTarget.style.border = '1px solid var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}

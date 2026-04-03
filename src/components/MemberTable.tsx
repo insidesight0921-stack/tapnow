@@ -1,7 +1,17 @@
 import { useStore, type Member } from '../store/useStore';
+import { Trash2, Edit2 } from 'lucide-react';
 
-export default function MemberTable({ members }: { members: Member[] }) {
+interface MemberTableProps {
+  members: Member[];
+  selectedIds: string[];
+  onToggleSelection: (id: string) => void;
+  onToggleAll: (ids: string[]) => void;
+}
+
+export default function MemberTable({ members, selectedIds, onToggleSelection, onToggleAll }: MemberTableProps) {
   const markAttendance = useStore(state => state.markAttendance);
+  const deleteMember = useStore(state => state.deleteMember);
+  const openMemberModal = useStore(state => state.openMemberModal);
   const attendances = useStore(state => state.attendances);
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -10,18 +20,29 @@ export default function MemberTable({ members }: { members: Member[] }) {
     return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--on-surface-variant)' }}>등록된 회원이 없습니다.</div>;
   }
 
+  const allIds = members.map(m => m.id);
+  const isAllSelected = allIds.length > 0 && allIds.every(id => selectedIds.includes(id));
+
   return (
     <div style={{ width: '100%', overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
         <thead>
           <tr style={{ background: 'var(--surface-container-low)', color: 'var(--on-surface-variant)' }}>
+            <th style={{ padding: '1rem', borderBottom: '1px solid var(--outline-variant)', width: '40px' }}>
+              <input 
+                type="checkbox" 
+                checked={isAllSelected} 
+                onChange={() => onToggleAll(allIds)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--tertiary)' }}
+              />
+            </th>
             <th style={{ padding: '1rem', borderBottom: '1px solid var(--outline-variant)' }}>이름</th>
             <th style={{ padding: '1rem', borderBottom: '1px solid var(--outline-variant)' }}>연락처</th>
             <th style={{ padding: '1rem', borderBottom: '1px solid var(--outline-variant)' }}>벨트 / 그랄</th>
             <th style={{ padding: '1rem', borderBottom: '1px solid var(--outline-variant)' }}>요금제 / 잔여</th>
             <th style={{ padding: '1rem', borderBottom: '1px solid var(--outline-variant)' }}>만료일 / D-day</th>
             <th style={{ padding: '1rem', borderBottom: '1px solid var(--outline-variant)' }}>상태</th>
-            <th style={{ padding: '1rem', borderBottom: '1px solid var(--outline-variant)', textAlign: 'center' }}>출석</th>
+            <th style={{ padding: '1rem', borderBottom: '1px solid var(--outline-variant)', textAlign: 'center' }}>출석 / 관리</th>
           </tr>
         </thead>
         <tbody>
@@ -44,11 +65,24 @@ export default function MemberTable({ members }: { members: Member[] }) {
 
             return (
               <tr key={member.id}
-                style={{ borderBottom: '1px solid var(--outline-variant)', transition: 'background 0.1s' }}
-                onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-container-highest)'}
-                onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                style={{ borderBottom: '1px solid var(--outline-variant)', transition: 'background 0.1s', background: selectedIds.includes(member.id) ? 'rgba(255,183,0,0.05)' : 'transparent' }}
+                onMouseOver={(e) => e.currentTarget.style.background = selectedIds.includes(member.id) ? 'rgba(255,183,0,0.1)' : 'var(--surface-container-highest)'}
+                onMouseOut={(e) => e.currentTarget.style.background = selectedIds.includes(member.id) ? 'rgba(255,183,0,0.05)' : 'transparent'}
               >
-                <td style={{ padding: '1rem', fontWeight: 600, color: 'var(--on-surface)' }}>{member.name}</td>
+                <td style={{ padding: '1rem' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={selectedIds.includes(member.id)} 
+                    onChange={() => onToggleSelection(member.id)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--tertiary)' }}
+                  />
+                </td>
+                <td 
+                  style={{ padding: '1rem', fontWeight: 600, color: 'var(--on-surface)', cursor: 'pointer' }}
+                  onClick={() => openMemberModal(member)}
+                >
+                  {member.name}
+                </td>
                 <td style={{ padding: '1rem', color: 'var(--on-surface-variant)' }}>{member.phone || '—'}</td>
                 <td style={{ padding: '1rem' }}>
                   {member.belt !== '' && (
@@ -84,26 +118,49 @@ export default function MemberTable({ members }: { members: Member[] }) {
                   }}>{status}</span>
                 </td>
                 <td style={{ padding: '1rem', textAlign: 'center' }}>
-                  <button
-                    disabled={attendedToday}
-                    style={{
-                      background: attendedToday ? 'rgba(82,183,136,0.15)' : 'transparent',
-                      border: '1px solid #52b788', color: '#52b788',
-                      borderRadius: 'var(--radius-md)', padding: '0.25rem 0.75rem',
-                      fontSize: '0.75rem', fontWeight: 600,
-                      cursor: attendedToday ? 'default' : 'pointer',
-                      whiteSpace: 'nowrap', opacity: attendedToday ? 0.7 : 1
-                    }}
-                    onClick={async () => {
-                      if (attendedToday) return;
-                      try {
-                        await markAttendance(member.id);
-                        alert(`${member.name} 님의 오늘(${todayStr}) 출석이 처리되었습니다.`);
-                      } catch (err) {
-                        alert('출석 처리 중 오류가 발생했습니다.');
-                      }
-                    }}
-                  >{attendedToday ? '✅ 완료' : '출석'}</button>
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                    <button
+                      disabled={attendedToday}
+                      style={{
+                        background: attendedToday ? 'rgba(82,183,136,0.15)' : 'transparent',
+                        border: '1px solid #52b788', color: '#52b788',
+                        borderRadius: 'var(--radius-md)', padding: '0.25rem 0.75rem',
+                        fontSize: '0.75rem', fontWeight: 600,
+                        cursor: attendedToday ? 'default' : 'pointer',
+                        whiteSpace: 'nowrap', opacity: attendedToday ? 0.7 : 1
+                      }}
+                      onClick={async () => {
+                        if (attendedToday) return;
+                        const res = await markAttendance(member.id);
+                        alert(res.message);
+                      }}
+                    >{attendedToday ? '✅ 완료' : '출석'}</button>
+                      <button
+                        style={{
+                          background: 'rgba(52,152,219,0.1)', border: 'none', color: '#3498db',
+                          borderRadius: 'var(--radius-md)', padding: '0.25rem 0.5rem',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => openMemberModal(member)}
+                        title="회원 수정"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        style={{
+                          background: 'rgba(255,71,87,0.1)', border: 'none', color: 'var(--error)',
+                          borderRadius: 'var(--radius-md)', padding: '0.25rem 0.5rem',
+                          cursor: 'pointer'
+                        }}
+                        onClick={async () => {
+                          if (confirm(`${member.name} 회원을 삭제하시겠습니까?`)) {
+                            await deleteMember(member.id);
+                          }
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                  </div>
                 </td>
               </tr>
             );

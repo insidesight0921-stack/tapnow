@@ -9,7 +9,7 @@ const PLANS = [
     id: 'free',
     name: 'Free',
     price: 0,
-    features: ['수련생 35명 제한', '기본 출석 관리', '키오스크 모드', '데이터 백업'],
+    features: ['수련생 30명 제한', '기본 출석 관리', '키오스크 모드', '데이터 백업'],
     color: '#888',
     bg: 'rgba(128,128,128,0.1)',
     icon: Zap
@@ -36,8 +36,7 @@ const PLANS = [
 
 export default function PlanPage() {
   const navigate = useNavigate();
-  const { gymId, gymAccounts, updateGymPlan } = useStore();
-  const currentGym = gymAccounts.find(g => g.id === gymId);
+  const { currentPlan, gymStatus, planExpireDate, updateGymPlan } = useStore();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,7 +56,7 @@ export default function PlanPage() {
       return;
     }
 
-    if (planId === currentGym?.plan) {
+    if (planId === currentPlan) {
       alert('이미 이용 중인 플랜입니다.');
       return;
     }
@@ -125,13 +124,13 @@ export default function PlanPage() {
               <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--on-surface-variant)' }}>현재 이용 중</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--tertiary)' }}>{currentGym?.plan.toUpperCase()}</h2>
+              <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--tertiary)' }}>{currentPlan.toUpperCase()}</h2>
               <div style={{ padding: '0.25rem 0.75rem', borderRadius: '2rem', background: 'rgba(255,165,0,0.15)', color: 'var(--tertiary)', fontSize: '0.75rem', fontWeight: 700 }}>
-                {currentGym?.status === 'trial' ? '무료 체험' : '구독 중'}
+                {gymStatus === 'trial' ? '무료 체험' : '구독 중'}
               </div>
             </div>
             <p style={{ marginTop: '0.75rem', fontSize: '0.9375rem', color: 'var(--on-surface-variant)' }}>
-              만료 예정일: <strong style={{ color: 'var(--on-surface)' }}>{currentGym?.planExpireDate || '없음'}</strong>
+              만료 예정일: <strong style={{ color: 'var(--on-surface)' }}>{planExpireDate || '없음'}</strong>
             </p>
           </div>
           <div style={{ display: 'none' }}>{/* Placeholder for illustration */}</div>
@@ -140,7 +139,7 @@ export default function PlanPage() {
         {/* 요금제 카드 그리드 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
           {PLANS.map((plan) => {
-            const isCurrent = currentGym?.plan === plan.id;
+            const isCurrent = currentPlan === plan.id;
             const Icon = plan.icon;
             const isPlus = plan.id === 'plus';
 

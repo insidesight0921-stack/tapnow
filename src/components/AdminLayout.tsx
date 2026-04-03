@@ -36,9 +36,8 @@ export default function AdminLayout() {
   const openPlanModal = useStore(state => state.openPlanModal);
   const closePlanModal = useStore(state => state.closePlanModal);
 
-  const isCsvModalOpen = useStore(state => state.isCsvModalOpen);
+  // CSV 모달용 전역 상태 (빌드 경고 방지 위해 필요한 곳에서만 가져옴)
   const openCsvModal = useStore(state => state.openCsvModal);
-  const closeCsvModal = useStore(state => state.closeCsvModal);
 
   const navigate = useNavigate();
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -93,12 +92,12 @@ export default function AdminLayout() {
     if (isMobile) setIsSidebarOpen(false);
   };
 
-  const currentGym = useStore(state => state.gymAccounts).find(g => g.id === currentGymId);
+  const currentPlan = useStore(state => state.currentPlan);
   const gymMembersCount = members.length;
-  const isFreeOverLimit = currentGym?.plan === 'free' && gymMembersCount >= 30;
+  const isFreeOverLimit = currentPlan === 'free' && gymMembersCount >= 30;
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-color)', position: 'relative' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-color)', position: 'relative', overflow: 'hidden' }}>
       {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div 
@@ -114,13 +113,14 @@ export default function AdminLayout() {
         borderRight: '1px solid var(--outline-variant)',
         display: 'flex',
         flexDirection: 'column',
-        position: isMobile ? 'fixed' : 'relative',
+        position: isMobile ? 'fixed' : 'sticky',
         left: isMobile && !isSidebarOpen ? '-260px' : '0',
         top: 0,
-        bottom: 0,
+        height: '100vh',
         zIndex: 999,
         transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        boxShadow: isMobile && isSidebarOpen ? '4px 0 24px rgba(0,0,0,0.3)' : 'none'
+        boxShadow: isMobile && isSidebarOpen ? '4px 0 24px rgba(0,0,0,0.3)' : 'none',
+        flexShrink: 0
       }}>
         <div style={{ padding: '2rem', borderBottom: '1px solid var(--outline-variant)' }}>
           <h1 style={{ fontFamily: 'var(--font-logo)', fontSize: '2rem', color: 'var(--tertiary)', letterSpacing: '2px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -135,16 +135,16 @@ export default function AdminLayout() {
         </div>
 
         <nav style={{ flex: 1, padding: '1.5rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-          <NavLink to="/admin/members" style={navStyle} onClick={handleNavLinkClick}>
+          <NavLink to="/admin/members" style={{ ...navStyle({ isActive: false }), whiteSpace: 'nowrap' }} onClick={handleNavLinkClick}>
             👥 회원 관리
           </NavLink>
-          <NavLink to="/admin/attendance" style={navStyle} onClick={handleNavLinkClick}>
+          <NavLink to="/admin/attendance" style={{ ...navStyle({ isActive: false }), whiteSpace: 'nowrap' }} onClick={handleNavLinkClick}>
             📋 출석 현황
           </NavLink>
-          <NavLink to="/admin/payments" style={navStyle} onClick={handleNavLinkClick}>
+          <NavLink to="/admin/payments" style={{ ...navStyle({ isActive: false }), whiteSpace: 'nowrap' }} onClick={handleNavLinkClick}>
             💳 결제 관리
           </NavLink>
-          <NavLink to="/admin/plan" style={navStyle} onClick={handleNavLinkClick}>
+          <NavLink to="/admin/plan" style={{ ...navStyle({ isActive: false }), whiteSpace: 'nowrap' }} onClick={handleNavLinkClick}>
             🚀 멤버십 구독
           </NavLink>
 
@@ -166,22 +166,22 @@ export default function AdminLayout() {
           )}
         </nav>
 
-        <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid var(--outline-variant)' }}>
           <button
             onClick={() => navigate('/kiosk')}
-            style={{ width: '100%', padding: '1rem', background: 'var(--tertiary)', border: 'none', color: '#502400', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 700, transition: 'all 0.2s' }}
+            style={{ width: '100%', padding: '1rem', background: 'var(--tertiary)', border: 'none', color: '#502400', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 700, transition: 'all 0.2s', whiteSpace: 'nowrap' }}
             onMouseOver={(e) => { e.currentTarget.style.filter = 'brightness(1.1)'; }}
             onMouseOut={(e) => { e.currentTarget.style.filter = 'brightness(1)'; }}
           >💻 키오스크 켜기</button>
           <button
             onClick={() => setIsSettingsModalOpen(true)}
-            style={{ width: '100%', padding: '1rem', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s', marginBottom: '0.5rem' }}
+            style={{ width: '100%', padding: '1rem', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s', marginBottom: '0.5rem', whiteSpace: 'nowrap' }}
             onMouseOver={(e) => { e.currentTarget.style.background = 'var(--surface-container-highest)'; }}
             onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >⚙️ 도장 설정</button>
           <button
             onClick={handleLogout}
-            style={{ width: '100%', padding: '1rem', background: 'transparent', border: '1px solid var(--error)', color: 'var(--error)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
+            style={{ width: '100%', padding: '1rem', background: 'transparent', border: '1px solid var(--error)', color: 'var(--error)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s', whiteSpace: 'nowrap' }}
             onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255, 180, 171, 0.1)'; }}
             onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >🔓 로그아웃</button>
@@ -189,7 +189,7 @@ export default function AdminLayout() {
       </aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflowY: 'auto' }}>
         <header style={{
           minHeight: isMobile ? '64px' : '88px',
           background: 'var(--surface-variant)',
@@ -256,24 +256,24 @@ export default function AdminLayout() {
             </div>
 
             {/* Right Section */}
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
-              <button className="btn btn-secondary compact-toggle" onClick={handleExportCsv} title="백업하기" style={{ height: '44px', minWidth: isMobile ? '44px' : 'auto', padding: isMobile ? '0' : '0 1rem', borderRadius: '0.75rem' }}>
-                <Save size={18} />
-                {!isMobile && <span style={{ marginLeft: '0.5rem', fontSize: '0.875rem' }}>백업</span>}
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexShrink: 0 }}>
+              <button className="btn btn-secondary compact-toggle" onClick={handleExportCsv} title="백업하기" style={{ height: '48px', minWidth: isMobile ? '48px' : 'auto', padding: isMobile ? '0' : '0 1.25rem', borderRadius: '0.75rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Save size={20} />
+                {!isMobile && <span style={{ marginLeft: '0.6rem', fontSize: '1rem', fontWeight: 600 }}>백업</span>}
               </button>
-              <button className="btn btn-secondary compact-toggle" onClick={() => openCsvModal()} title="불러오기" style={{ height: '44px', minWidth: isMobile ? '44px' : 'auto', padding: isMobile ? '0' : '0 1rem', borderRadius: '0.75rem' }}>
-                <Upload size={18} />
-                {!isMobile && <span style={{ marginLeft: '0.5rem', fontSize: '0.875rem' }}>복구</span>}
+              <button className="btn btn-secondary compact-toggle" onClick={() => openCsvModal()} title="불러오기" style={{ height: '48px', minWidth: isMobile ? '48px' : 'auto', padding: isMobile ? '0' : '0 1.25rem', borderRadius: '0.75rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Upload size={20} />
+                {!isMobile && <span style={{ marginLeft: '0.6rem', fontSize: '1rem', fontWeight: 600 }}>복구</span>}
               </button>
-              <button className="btn btn-secondary compact-toggle" onClick={() => openPlanModal()} title="요금제 설정" style={{ height: '44px', minWidth: isMobile ? '44px' : 'auto', padding: isMobile ? '0' : '0 1rem', borderRadius: '0.75rem' }}>
-                <Settings size={18} />
-                {!isMobile && <span style={{ marginLeft: '0.5rem', fontSize: '0.875rem' }}>요금제</span>}
+              <button className="btn btn-secondary compact-toggle" onClick={() => openPlanModal()} title="요금제 설정" style={{ height: '48px', minWidth: isMobile ? '48px' : 'auto', padding: isMobile ? '0' : '0 1.25rem', borderRadius: '0.75rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Settings size={20} />
+                {!isMobile && <span style={{ marginLeft: '0.6rem', fontSize: '1rem', fontWeight: 600 }}>요금제</span>}
               </button>
             </div>
           </div>
         </header>
 
-        <div style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
+        <div style={{ padding: isMobile ? '1.5rem 1rem' : '2rem', flex: 1 }}>
           <Outlet />
         </div>
       </main>
@@ -285,7 +285,7 @@ export default function AdminLayout() {
         memberToEdit={editingMember}
       />
       <PlanManageModal isOpen={isPlanModalOpen} onClose={closePlanModal} />
-      <CsvImportModal isOpen={isCsvModalOpen} onClose={closeCsvModal} />
+      <CsvImportModal />
       <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} />
     </div>
   );

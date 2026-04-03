@@ -15,13 +15,10 @@ export default function AttendanceDetailModal({ isOpen, onClose, member }: Atten
   const addPastAttendance = useStore(state => state.addPastAttendance);
   
   const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
-  const [manualTime, setManualTime] = useState('12:00');
-
   const handleManualAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!member) return;
-    const dateStr = new Date(`${manualDate}T${manualTime}:00`).toISOString();
-    addPastAttendance(member.id, dateStr);
+    addPastAttendance(member.id, manualDate);
   };
 
   if (!member) return null;
@@ -87,7 +84,6 @@ export default function AttendanceDetailModal({ isOpen, onClose, member }: Atten
               
               <form onSubmit={handleManualAdd} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', background: 'var(--surface-container-low)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px dashed var(--outline-variant)' }}>
                 <input required type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} style={{ flex: 1, padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)' }} />
-                <input required type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} style={{ width: '100px', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)' }} />
                 <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.5rem 1rem', background: 'var(--tertiary)', color: '#502400', borderRadius: '4px', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
                   <Plus size={16} /> 추가
                 </button>
@@ -97,7 +93,6 @@ export default function AttendanceDetailModal({ isOpen, onClose, member }: Atten
                 {memberAttendances.map(a => {
                   const dateObj = new Date(a.date);
                   const dateStr = dateObj.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
-                  const timeStr = dateObj.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
                   
                   return (
                     <div key={a.id} style={{ 
@@ -107,7 +102,6 @@ export default function AttendanceDetailModal({ isOpen, onClose, member }: Atten
                     }}>
                       <span style={{ fontWeight: 500 }}>{dateStr}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <span style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>{timeStr}</span>
                         <button onClick={() => deleteAttendance(a.id)} style={{ background: 'transparent', border: 'none', color: 'var(--error)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                           <Trash2 size={16} />
                         </button>

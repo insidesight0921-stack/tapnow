@@ -162,39 +162,46 @@ export default function PaymentPage() {
       </div>
 
       {/* 필터 */}
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '0.75rem', marginBottom: '1.5rem', alignItems: isMobile ? 'stretch' : 'center' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '1rem', marginBottom: '1.5rem', alignItems: isMobile ? 'stretch' : 'center', flexWrap: 'wrap' }}>
         <div style={{ 
           display: 'flex', 
-          gap: '0.375rem', 
+          gap: '0.5rem', 
           overflowX: 'auto', 
           paddingBottom: '0.5rem', 
           width: isMobile ? '100%' : 'auto',
           margin: isMobile ? '0 -1rem' : '0',
-          padding: isMobile ? '0 1rem 0.5rem' : '0 0 0.5rem'
+          padding: isMobile ? '0 1rem 0.5rem' : '0 0 0.5rem',
+          flexWrap: isMobile ? 'nowrap' : 'wrap'
         }} className="no-wrap-group">
           <input
             type="month"
             value={monthFilter}
             onChange={e => setMonthFilter(e.target.value)}
-            style={{ padding: '0 0.75rem', background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)', borderRadius: '0.75rem', color: 'var(--on-surface)', fontSize: '0.875rem', outline: 'none', height: '44px', flexShrink: 0 }}
+            style={{ padding: '0.75rem', background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)', borderRadius: '0.75rem', color: 'var(--on-surface)', fontSize: '0.875rem', outline: 'none', height: '44px', flexShrink: 0 }}
           />
-          {(['전체', '카드', '현금', '계좌이체', '기타'] as const).map(m => (
-            <button key={m} onClick={() => setMethodFilter(m)} style={{ 
-              background: methodFilter === m ? 'var(--tertiary)' : 'var(--surface-container-high)', 
-              color: methodFilter === m ? '#502400' : 'var(--on-surface-variant)', 
-              border: methodFilter === m ? 'none' : '1px solid var(--outline-variant)',
-              padding: '0 1rem', borderRadius: '0.75rem', fontSize: '0.8125rem', fontWeight: methodFilter === m ? 700 : 500, cursor: 'pointer', height: '44px', whiteSpace: 'nowrap' 
-            }}>{m}</button>
-          ))}
+          <select 
+            value={methodFilter} 
+            onChange={e => setMethodFilter(e.target.value as any)}
+            style={{ 
+              padding: '0 1rem', background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)', 
+              borderRadius: '0.75rem', color: 'var(--on-surface)', fontSize: '0.875rem', outline: 'none', height: '44px', cursor: 'pointer' 
+            }}
+          >
+            <option value="전체">모든 결제 수단</option>
+            <option value="카드">카드</option>
+            <option value="현금">현금</option>
+            <option value="계좌이체">계좌이체</option>
+            <option value="기타">기타</option>
+          </select>
         </div>
         
-        <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', width: isMobile ? '100%' : 'auto', flex: isMobile ? 'unset' : 1, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: '0.25rem', flex: isMobile ? 1 : 'unset' }}>
                 {(['전체', '완료'] as const).map(s => (
-                <button key={s} onClick={() => setStatusFilter(s)} style={{ flex: isMobile ? 1 : 'unset', background: statusFilter === s ? 'var(--primary)' : 'var(--surface-container-high)', color: statusFilter === s ? '#000' : 'var(--on-surface-variant)', border: 'none', padding: '0 1rem', borderRadius: '0.75rem', fontSize: '0.8125rem', fontWeight: statusFilter === s ? 700 : 500, cursor: 'pointer', height: '44px' }}>{s}</button>
+                <button key={s} onClick={() => setStatusFilter(s)} style={{ flex: isMobile ? 1 : 'unset', background: statusFilter === s ? 'var(--primary)' : 'var(--surface-container-high)', color: statusFilter === s ? '#000' : 'var(--on-surface-variant)', border: 'none', padding: '0 1rem', borderRadius: '0.75rem', fontSize: '0.8125rem', fontWeight: statusFilter === s ? 700 : 500, cursor: 'pointer', height: '44px', whiteSpace: 'nowrap' }}>{s}</button>
                 ))}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)', borderRadius: '0.75rem', padding: '0 1rem', height: '44px', flex: isMobile ? 2 : 'unset' }}>
+            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)', borderRadius: '0.75rem', padding: '0 1rem', height: '44px', flex: isMobile ? 2 : 1, minWidth: '150px' }}>
                 <Search size={18} color="var(--on-surface-variant)" style={{ marginRight: '0.75rem' }} />
                 <input type="text" placeholder="회원 검색..." value={search} onChange={e => setSearch(e.target.value)} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface)', outline: 'none', fontSize: '0.9375rem', width: '100%' }} />
             </div>

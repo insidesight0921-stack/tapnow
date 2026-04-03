@@ -1,8 +1,15 @@
 import { useStore, type Member } from '../store/useStore';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Trash2 } from 'lucide-react';
 
-export default function MemberCard({ member }: { member: Member }) {
+interface MemberCardProps {
+  member: Member;
+  isSelected?: boolean;
+  onToggleSelection?: (id: string) => void;
+}
+
+export default function MemberCard({ member, isSelected, onToggleSelection }: MemberCardProps) {
   const markAttendance = useStore(state => state.markAttendance);
+  const deleteMember = useStore(state => state.deleteMember);
   const openMemberModal = useStore(state => state.openMemberModal);
   const attendances = useStore(state => state.attendances);
 
@@ -56,19 +63,29 @@ export default function MemberCard({ member }: { member: Member }) {
       e.currentTarget.style.boxShadow = 'none';
     }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--on-surface)' }}>{member.name}</h3>
-            {isLongAbsent && <span style={{ fontSize: '0.6875rem', background: 'rgba(100,100,100,0.2)', color: 'var(--on-surface-variant)', padding: '0.125rem 0.4rem', borderRadius: '8px' }}>💤 장기미출석</span>}
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <span style={{
-              background: `var(--belt-${member.belt === '화이트' ? 'white' : member.belt === '블루' ? 'blue' : 'black'})`,
-              color: member.belt === '화이트' ? '#000' : '#fff',
-              padding: '0.125rem 0.625rem', borderRadius: 'var(--radius-full)', fontSize: '0.6875rem', fontWeight: 600
-            }}>{member.belt}</span>
-            <span style={{ color: 'var(--tertiary)', letterSpacing: '2px', fontSize: '0.75rem' }}>{'●'.repeat(member.gral)}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative' }}>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {onToggleSelection && (
+            <input 
+              type="checkbox" 
+              checked={isSelected} 
+              onChange={() => onToggleSelection(member.id)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--tertiary)', marginTop: '0.25rem' }}
+            />
+          )}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--on-surface)' }}>{member.name}</h3>
+              {isLongAbsent && <span style={{ fontSize: '0.6875rem', background: 'rgba(100,100,100,0.2)', color: 'var(--on-surface-variant)', padding: '0.125rem 0.4rem', borderRadius: '8px' }}>💤 장기미출석</span>}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <span style={{
+                background: `var(--belt-${member.belt === '화이트' ? 'white' : member.belt === '블루' ? 'blue' : 'black'})`,
+                color: member.belt === '화이트' ? '#000' : '#fff',
+                padding: '0.125rem 0.625rem', borderRadius: 'var(--radius-full)', fontSize: '0.6875rem', fontWeight: 600
+              }}>{member.belt}</span>
+              <span style={{ color: 'var(--tertiary)', letterSpacing: '2px', fontSize: '0.75rem' }}>{'●'.repeat(member.gral)}</span>
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
@@ -130,16 +147,13 @@ export default function MemberCard({ member }: { member: Member }) {
           onMouseOut={(e) => { if (!attendedToday) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#52b788'; }}}
           onClick={async () => {
             if (attendedToday) return;
-            try {
-              await markAttendance(member.id);
-              alert(`${member.name} 님의 오늘(${todayStr}) 출석이 처리되었습니다.`);
-            } catch (err) {
-              alert('출석 처리 중 오류가 발생했습니다.');
-            }
+            const res = await markAttendance(member.id);
+            alert(res.message);
           }}
         >
           {attendedToday ? '✅ 출석 완료' : '출석 처리'}
         </button>
+
         <button style={{
           background: 'var(--surface-container-highest)', border: 'none', color: 'var(--on-surface)',
           width: '44px', height: '44px', borderRadius: '0.75rem', cursor: 'pointer',
@@ -150,6 +164,22 @@ export default function MemberCard({ member }: { member: Member }) {
           onClick={() => openMemberModal(member)}
         >
           <MoreHorizontal size={20} />
+        </button>
+
+        <button style={{
+          background: 'rgba(255,71,87,0.1)', border: 'none', color: 'var(--error)',
+          width: '44px', height: '44px', borderRadius: '0.75rem', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
+        }}
+          onMouseOver={(e) => { e.currentTarget.style.background = 'var(--error)'; e.currentTarget.style.color = '#fff'; }}
+          onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255,71,87,0.1)'; e.currentTarget.style.color = 'var(--error)'; }}
+          onClick={async () => {
+            if (confirm(`${member.name} 회원을 삭제하시겠습니까? 관련 데이터가 모두 삭제됩니다.`)) {
+              await deleteMember(member.id);
+            }
+          }}
+        >
+          <Trash2 size={18} />
         </button>
       </div>
     </div>

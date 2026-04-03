@@ -117,9 +117,9 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
               maxHeight: '90vh'
             }}
           >
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>요금제 관리</h2>
-              <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={24} /></button>
+            <div style={{ padding: '1.75rem 1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>요금제 관리</h2>
+              <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', padding: '0.5rem' }}><X size={32} /></button>
             </div>
             
             <div style={{ padding: isMobile ? '1.25rem' : '1.5rem', overflowY: 'auto', flex: 1, minHeight: '300px' }}>
@@ -152,10 +152,10 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
                           )}
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
-                          <button onClick={handleSaveEdit} disabled={isSubmitting} className="btn-primary" style={{ height: '36px', padding: '0 1rem', borderRadius: 'var(--radius-sm)', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}>
+                          <button onClick={handleSaveEdit} disabled={isSubmitting} className="btn-primary" style={{ height: '44px', padding: '0 1.5rem', borderRadius: 'var(--radius-md)', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '1rem' }}>
                             {isSubmitting ? '...' : '저장'}
                           </button>
-                          <button onClick={() => setEditingPlanId(null)} disabled={isSubmitting} style={{ padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={18} /></button>
+                          <button onClick={() => setEditingPlanId(null)} disabled={isSubmitting} style={{ padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={24} /></button>
                         </div>
                       </div>
                     ) : (
@@ -201,10 +201,10 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
                       )}
                     </div>
                      <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
-                      <button type="submit" disabled={isSubmitting} style={{ height: '36px', width: '100%', background: 'var(--tertiary)', color: '#502400', borderRadius: 'var(--radius-sm)', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem' }}>
-                        {isSubmitting ? '처리 중...' : '저장'}
+                      <button type="submit" disabled={isSubmitting} style={{ height: '44px', width: '120px', background: 'var(--tertiary)', color: '#502400', borderRadius: 'var(--radius-md)', border: 'none', fontWeight: 800, cursor: 'pointer', fontSize: '1rem' }}>
+                        {isSubmitting ? '처리 중...' : '추가하기'}
                       </button>
-                      <button type="button" onClick={() => setIsAdding(false)} disabled={isSubmitting} style={{ padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={18}/></button>
+                      <button type="button" onClick={() => setIsAdding(false)} disabled={isSubmitting} style={{ padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={24}/></button>
                     </div>
                   </form>
                 )}

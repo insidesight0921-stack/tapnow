@@ -103,6 +103,9 @@ interface AppData {
   gymPin: string;
   theme: 'dark' | 'light';
   profileImage: string | null;
+  currentPlan: 'free' | 'basic' | 'plus';
+  gymStatus: 'active' | 'suspended' | 'trial';
+  planExpireDate: string;
 }
 
 interface AppState extends AppData {
@@ -134,8 +137,9 @@ interface AppState extends AppData {
   updatePlan: (id: string, plan: Partial<Plan>) => Promise<void>;
   deletePlan: (id: string) => Promise<void>;
 
-  markAttendance: (memberId: string) => Promise<void>;
+  markAttendance: (memberId: string) => Promise<{ success: boolean; message: string }>;
   bulkMarkAttendance: (memberIds: string[]) => Promise<void>;
+  bulkDeleteMembers: (memberIds: string[]) => Promise<void>;
   deleteAttendance: (attendanceId: string) => Promise<void>;
   addPastAttendance: (memberId: string, dateStr: string) => Promise<void>;
 
@@ -175,6 +179,9 @@ export const useStore = create<AppState>((set, get) => ({
   gymPin: '0000',
   theme: 'dark',
   profileImage: null,
+  currentPlan: 'free',
+  gymStatus: 'trial',
+  planExpireDate: '',
   isLoading: true,
 
   editingMember: null,
@@ -233,6 +240,20 @@ export const useStore = create<AppState>((set, get) => ({
 
             // 데이터 실시간 구독 시작
             const gymIdQuery = (coll: string) => query(collection(db, coll), where('gymId', '==', user.uid));
+            onSnapshot(doc(db, 'gyms', user.uid), (docSnap) => {
+              if (docSnap.exists()) {
+                const data = docSnap.data();
+                set({ 
+                  gymName: data.gymName,
+                  gymPin: data.gymPin || '0000',
+                  theme: data.theme || 'dark',
+                  profileImage: data.profileImage || null,
+                  currentPlan: data.plan || 'free',
+                  gymStatus: data.status || 'trial',
+                  planExpireDate: data.planExpireDate || ''
+                });
+              }
+            });
             onSnapshot(gymIdQuery('members'), snap => set({ members: snap.docs.map(d => ({ id: d.id, ...d.data() } as Member)) }));
             onSnapshot(gymIdQuery('plans'), snap => set({ plans: snap.docs.map(d => ({ id: d.id, ...d.data() } as Plan)) }));
             onSnapshot(gymIdQuery('attendances'), snap => set({ attendances: snap.docs.map(d => ({ id: d.id, ...d.data() } as Attendance)) }));
@@ -305,8 +326,36 @@ export const useStore = create<AppState>((set, get) => ({
     await updateDoc(doc(db, 'gyms', id), fields);
   },
 
-  deleteGymAccount: async (id) => {
-    await deleteDoc(doc(db, 'gyms', id));
+  deleteGymAccount: async (gymId) => {
+    try {
+      // 1. Vercel API를 통해 Firebase Auth 사용자 삭제 (무료 방식)
+      try {
+        await fetch('/api/delete-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: gymId }),
+        });
+      } catch (authError) {
+        console.error('Failed to delete Auth user via API:', authError);
+      }
+
+      // 2. 도장 자체 정보 삭제
+      await deleteDoc(doc(db, 'gyms', gymId));
+
+      // 3. 연관된 모든 데이터 삭제 (회원, 출석, 요금제, 결제)
+      const collections = ['members', 'attendances', 'plans', 'payments'];
+      for (const colName of collections) {
+        const q = query(collection(db, colName), where('gymId', '==', gymId));
+        const snap = await getDocs(q);
+        const deletePromises = snap.docs.map(d => deleteDoc(d.ref));
+        await Promise.all(deletePromises);
+      }
+
+      console.log(`Gym ${gymId} deleted with all associated records.`);
+    } catch (error) {
+      console.error('Error deleting gym account:', error);
+      throw error;
+    }
   },
 
   updateEmail: (email) => set({ adminEmail: email }),
@@ -336,15 +385,22 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   addMember: async (member) => {
-    const { gymId, gymAccounts, members } = get();
-    const currentGym = gymAccounts.find(g => g.id === gymId);
+    const { gymId, currentPlan, members } = get();
     
-    if (currentGym?.plan === 'free' && members.length >= 35) {
-      return { success: false, message: '무료 요금제 한도(35명)를 초과했습니다.' };
+    // 무료 요금제 30명 제한 (사용자 요청에 따라 35명에서 30명으로 하향 조정 및 엄격 차단)
+    const gymMembers = members.filter(m => m.gymId === gymId);
+    
+    if (currentPlan === 'free' && gymMembers.length >= 30) {
+      return { success: false, message: '무료 요금제 한도(30명)를 초과했습니다. [플러스] 요금제로 업그레이드하여 인원 제한 없이 이용해 보세요.' };
     }
 
-    await addDoc(collection(db, 'members'), { ...member, gymId });
-    return { success: true, message: '회원이 등록되었습니다.' };
+    try {
+      await addDoc(collection(db, 'members'), { ...member, gymId });
+      return { success: true, message: '회원이 성공적으로 등록되었습니다.' };
+    } catch (err) {
+      console.error('Add Member Error:', err);
+      return { success: false, message: '서버 오류로 인해 회원 등록에 실패했습니다.' };
+    }
   },
 
   updateMember: async (id, updatedFields) => {
@@ -405,10 +461,20 @@ export const useStore = create<AppState>((set, get) => ({
   markAttendance: async (memberId) => {
     const { members, attendances, gymId } = get();
     const member = members.find(m => m.id === memberId);
-    if (!member) return;
+    if (!member) return { success: false, message: '회원을 찾을 수 없습니다.' };
 
     const todayStr = getTodayStr();
-    if (attendances.some(a => a.memberId === memberId && a.date === todayStr)) return;
+    if (attendances.some(a => a.memberId === memberId && a.date === todayStr)) {
+      return { success: false, message: '이미 출석했습니다.' };
+    }
+
+    // 0회여도 출석은 하되, 경고만 전달 (UI에서 처리)
+    let isWarning = false;
+    const ticketPlans = member.plans.filter(p => p.type === '횟수권');
+    if (ticketPlans.length > 0) {
+      const totalRem = ticketPlans.reduce((s, p) => s + (p.remainingQty ?? 0), 0);
+      if (totalRem <= 0) isWarning = true;
+    }
 
     await addDoc(collection(db, 'attendances'), {
       gymId,
@@ -418,14 +484,24 @@ export const useStore = create<AppState>((set, get) => ({
       timestamp: serverTimestamp()
     });
 
-    const updatedPlans = member.plans.map(p => {
-      if (p.type === '횟수권' && p.remainingQty !== undefined && p.remainingQty > 0) {
-        return { ...p, remainingQty: p.remainingQty - 1 };
-      }
-      return p;
-    });
+    const ticketPlanIndices = member.plans
+      .map((p, i) => (p.type === '횟수권' ? i : -1))
+      .filter(i => i !== -1);
 
-    await updateDoc(doc(db, 'members', memberId), { plans: updatedPlans });
+    if (ticketPlanIndices.length > 0) {
+      let targetIdx = ticketPlanIndices.find(i => (member.plans[i].remainingQty ?? 0) > 0);
+      if (targetIdx === undefined) targetIdx = ticketPlanIndices[0];
+
+      const updatedPlans = [...member.plans];
+      const p = updatedPlans[targetIdx];
+      updatedPlans[targetIdx] = { ...p, remainingQty: Math.max(-99, (p.remainingQty ?? 0) - 1) };
+      await updateDoc(doc(db, 'members', memberId), { plans: updatedPlans });
+    }
+    
+    return { 
+      success: true, 
+      message: isWarning ? '잔여 횟수가 부족하지만 출석 처리되었습니다.' : '출석이 완료되었습니다.' 
+    };
   },
 
   bulkMarkAttendance: async (memberIds) => {
@@ -434,8 +510,40 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  bulkDeleteMembers: async (memberIds) => {
+    for (const id of memberIds) {
+      await get().deleteMember(id);
+    }
+  },
+
   deleteAttendance: async (id) => {
-    await deleteDoc(doc(db, 'attendances', id));
+    try {
+      // 1. 삭제할 출석 기록 정보를 먼저 가져옵니다.
+      const attDoc = await getDoc(doc(db, 'attendances', id));
+      if (attDoc.exists()) {
+        const attData = attDoc.data();
+        const memberId = attData.memberId;
+        
+        // 2. 해당 회원의 횟수권 정보를 찾아 복구합니다.
+        const member = get().members.find(m => m.id === memberId);
+        if (member) {
+          const ticketPlanIndex = member.plans.findIndex(p => p.type === '횟수권');
+          if (ticketPlanIndex !== -1) {
+            const updatedPlans = [...member.plans];
+            const p = updatedPlans[ticketPlanIndex];
+            // 잔여 횟수를 1 증가시킵니다.
+            updatedPlans[ticketPlanIndex] = { ...p, remainingQty: (p.remainingQty ?? 0) + 1 };
+            await updateDoc(doc(db, 'members', memberId), { plans: updatedPlans });
+          }
+        }
+      }
+      
+      // 3. 출석 기록을 삭제합니다.
+      await deleteDoc(doc(db, 'attendances', id));
+    } catch (error) {
+      console.error('Error deleting attendance:', error);
+      throw error;
+    }
   },
 
   addPastAttendance: async (memberId, dateStr) => {
@@ -451,6 +559,22 @@ export const useStore = create<AppState>((set, get) => ({
       date: dateOnly,
       timestamp: serverTimestamp()
     });
+
+    // 횟수권 차감 로직 추가
+    // 횟수권 차감 로직 (하나만 차감)
+    const ticketPlanIndices = member.plans
+      .map((p, i) => (p.type === '횟수권' ? i : -1))
+      .filter(i => i !== -1);
+
+    if (ticketPlanIndices.length > 0) {
+      let targetIdx = ticketPlanIndices.find(i => (member.plans[i].remainingQty ?? 0) > 0);
+      if (targetIdx === undefined) targetIdx = ticketPlanIndices[0];
+
+      const updatedPlans = [...member.plans];
+      const p = updatedPlans[targetIdx];
+      updatedPlans[targetIdx] = { ...p, remainingQty: Math.max(-99, (p.remainingQty ?? 0) - 1) };
+      await updateDoc(doc(db, 'members', memberId), { plans: updatedPlans });
+    }
   },
 
   addPayment: async (payment) => {

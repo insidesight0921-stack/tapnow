@@ -1,234 +1,315 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, UploadCloud, Info, AlertTriangle } from 'lucide-react';
-import { useStore } from '../store/useStore';
+import { X, Upload, Check, FileText, ArrowRight } from 'lucide-react';
 import Papa from 'papaparse';
+import { useStore } from '../store/useStore';
 
-interface CsvImportModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
+// 자동 매핑용 유의어 사전
+const EXPECTED_FIELDS: Record<string, string[]> = {
+  'name': ['이름', '성함', '회원명', 'Name', 'Customer'],
+  'phone': ['전화번호', '휴대폰', '연락처', 'Phone', 'Mobile', 'Tel'],
+  'belt': ['벨트', '급수', 'Belt', 'Grade'],
+  'gral': ['그랄', '단', 'Gral', 'Stripe'],
+  'registerDate': ['등록일', '가입일', 'Registered At', 'Join Date'],
+  'startDate': ['시작일', '이용 시작', 'Start Date'],
+  'expireDate': ['만료', '만료일', '종료', '종료일', 'End Date', 'Expiration'],
+  'planName': ['요금제', '상품', '이용권', '상품명', '요금제명', 'Plan'],
+  'remainingQty': ['잔여횟수', '남은횟수', '남은 회수', '잔여', 'Remaining'],
+  'paymentAmount': ['납부금액', '결제금액', '금액', 'Paid', 'Amount'],
+  'paymentMethod': ['납부방법', '결제수단', '결제방법', 'Method', 'Payment Type'],
+  'memo': ['메모', '특이사항', 'Note', 'Memo']
+};
 
-const EXPECTED_HEADERS = ['이름', '전화번호', '벨트', '그랄'];
-
-export default function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
+export default function CsvImportModal() {
+  const isOpen = useStore(state => state.isCsvModalOpen);
+  const onClose = useStore(state => state.closeCsvModal);
   const addMember = useStore(state => state.addMember);
-  const currentGymId = useStore(state => state.gymId) || 'gym_default';
+  const gymPlans = useStore(state => state.plans);
 
-  const [file, setFile] = useState<File | null>(null);
-  const [parsedData, setParsedData] = useState<any[]>([]);
+  const [step, setStep] = useState<'upload' | 'mapping' | 'preview' | 'processing'>('upload');
+  const [csvData, setCsvData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [headerMapping, setHeaderMapping] = useState<Record<string, string>>({
-    '이름': '', '전화번호': '', '벨트': '', '그랄': ''
-  });
-  const [isError, setIsError] = useState(false);
-  
+  const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const resetState = () => {
-    setFile(null);
-    setParsedData([]);
+  // 모든 상태 초기화
+  const handleReset = useCallback(() => {
+    setStep('upload');
+    setCsvData([]);
     setHeaders([]);
-    setHeaderMapping({'이름': '', '전화번호': '', '벨트': '', '그랄': ''});
-    setIsError(false);
+    setFieldMapping({});
+    setPreviewData([]);
+    setError('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
+
+  // 모달이 닫힐 때 자동 초기화
+  useEffect(() => {
+    if (!isOpen) {
+      handleReset();
+    }
+  }, [isOpen, handleReset]);
+
+  // 날짜 형식 표준화 (YYYY-MM-DD)
+  const formatDate = (val: string) => {
+    if (!val) return '';
+    try {
+      const clean = val.replace(/[^0-9/-]/g, '-').replace(/\./g, '-');
+      const d = new Date(clean);
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().split('T')[0];
+    } catch { return ''; }
   };
 
-  const handleClose = () => {
-    resetState();
-    onClose();
+  // 전화번호 형식 표준화
+  const formatPhone = (val: string) => {
+    if (!val) return '';
+    const digits = val.replace(/[^0-9]/g, '');
+    if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+    return digits;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFile = e.target.files?.[0];
-    if (!uploadedFile) return;
-    setFile(uploadedFile);
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    Papa.parse(uploadedFile, {
+    Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        if (results.meta.fields) {
-          setHeaders(results.meta.fields);
-          
-          // 자동 매핑 시도
-          const newMapping = { '이름': '', '전화번호': '', '벨트': '', '그랄': '' };
-          results.meta.fields.forEach(field => {
-            if (field.includes('이름') || field.includes('name')) newMapping['이름'] = field;
-            if (field.includes('전화') || field.includes('phone') || field.includes('연락처')) newMapping['전화번호'] = field;
-            if (field.includes('벨트') || field.includes('belt') || field.includes('띠')) newMapping['벨트'] = field;
-            if (field.includes('그랄') || field.includes('grau') || field.includes('그라우')) newMapping['그랄'] = field;
-          });
-          setHeaderMapping(newMapping);
-          setParsedData(results.data);
-          setIsError(false);
-        } else {
-          setIsError(true);
+        if (results.data.length === 0) {
+          setError('파일에 데이터가 없습니다.');
+          return;
         }
+        
+        const csvHeaders = Object.keys(results.data[0] as any);
+        setCsvData(results.data);
+        setHeaders(csvHeaders);
+        
+        // 지능형 자동 매핑
+        const initialMapping: Record<string, string> = {};
+        Object.entries(EXPECTED_FIELDS).forEach(([sysField, synonyms]) => {
+          const matched = csvHeaders.find(h => 
+            synonyms.some(s => h.toLowerCase().includes(s.toLowerCase()))
+          );
+          if (matched) initialMapping[sysField] = matched;
+        });
+        
+        setFieldMapping(initialMapping);
+        setStep('mapping');
+        setError('');
       },
-      error: () => {
-        setIsError(true);
-      }
+      error: (err) => setError(`CSV 파싱 오류: ${err.message}`)
     });
   };
 
-  const handleImport = () => {
-    if (!headerMapping['이름']) {
-      alert("이름 필드는 필수적으로 매핑되어야 합니다.");
+  const handleApplyMapping = () => {
+    if (!fieldMapping['name'] || !fieldMapping['phone']) {
+      setError('이름과 전화번호 필드는 반드시 매핑해야 합니다.');
       return;
     }
 
     const today = new Date().toISOString().split('T')[0];
     
-    parsedData.forEach(row => {
-      const name = row[headerMapping['이름']];
-      if (!name) return; // 이름 없는 행 스킵
-      
-      const phone = headerMapping['전화번호'] ? row[headerMapping['전화번호']] : '';
-      const belt = headerMapping['벨트'] ? row[headerMapping['벨트']] : '화이트';
-      const gralStr = headerMapping['그랄'] ? row[headerMapping['그랄']] : '0';
-      const gral = isNaN(Number(gralStr)) ? 0 : Number(gralStr);
-
-      addMember({
-        gymId: currentGymId,
-        name,
-        phone,
-        belt,
-        gral,
-        registerDate: today,
-        startDate: today,
+    // 데이터 처리 및 매핑
+    const processed = csvData.map(row => {
+      const member: any = {
+        name: row[fieldMapping['name']] || '',
+        phone: formatPhone(row[fieldMapping['phone']] || ''),
+        belt: row[fieldMapping['belt']] || '화이트',
+        gral: parseInt(row[fieldMapping['gral']]) || 0,
+        registerDate: formatDate(row[fieldMapping['registerDate']]) || today,
+        startDate: formatDate(row[fieldMapping['startDate']]) || today,
+        expireDate: formatDate(row[fieldMapping['expireDate']]) || '',
+        memo: row[fieldMapping['memo']] || 'CSV 복구',
         plans: [],
         paymentAmount: 0,
-        paymentMethod: '현금',
-        expireDate: '',
-        memo: 'CSV 일괄 가져오기'
-      });
-    });
+        paymentMethod: 'CSV 복구'
+      };
 
-    alert(`${parsedData.length}명의 데이터가 등록되었습니다.`);
-    handleClose();
+      // 요금제 자동 매핑
+      const csvPlanName = row[fieldMapping['planName']];
+      if (csvPlanName) {
+        const normalize = (s: string) => s ? s.toString().toLowerCase().trim().replace(/\s+/g, '') : '';
+        let targetName = normalize(csvPlanName);
+        let multiplier = 1;
+
+        // x2, *2, 2개 등의 수량 접미사 인식
+        const qtyMatch = csvPlanName.toString().match(/(.*)[x*](\d+)$/) || csvPlanName.toString().match(/(.*)(\d+)개$/);
+        if (qtyMatch) {
+          targetName = normalize(qtyMatch[1]);
+          multiplier = parseInt(qtyMatch[2]) || 1;
+        }
+
+        const matched = gymPlans.find(p => normalize(p.name) === targetName);
+        if (matched) {
+          member.plans = [];
+          for (let i = 0; i < multiplier; i++) {
+            member.plans.push({
+              name: matched.name,
+              qty: matched.type === '횟수권' ? (matched.defaultQty || 1) : 1,
+              remainingQty: matched.type === '횟수권' ? (matched.defaultQty || 1) : undefined,
+              type: matched.type
+            });
+          }
+          
+          const csvAmount = row[fieldMapping['paymentAmount']];
+          member.paymentAmount = csvAmount ? parseInt(csvAmount.toString().replace(/[^0-9]/g, '')) : (matched.price * multiplier);
+          
+          const csvMethod = row[fieldMapping['paymentMethod']];
+          if (csvMethod) member.paymentMethod = csvMethod;
+
+          if (!member.expireDate) {
+            const start = new Date(member.startDate);
+            start.setMonth(start.getMonth() + ((matched.months || 0) * multiplier));
+            member.expireDate = start.toISOString().split('T')[0];
+          }
+        }
+      }
+
+      // 횟수권인 경우 잔여 횟수 정보가 CSV에 따로 있다면 덮어쓰기
+      const csvRemQty = row[fieldMapping['remainingQty']];
+      if (csvRemQty && member.plans.length > 0) {
+        const totalRem = parseInt(csvRemQty.toString().replace(/[^0-9]/g, ''));
+        if (!isNaN(totalRem)) {
+          member.plans.forEach((p: any, idx: number) => {
+            if (p.type === '횟수권') {
+              p.remainingQty = idx === 0 ? totalRem : 0;
+            }
+          });
+        }
+      }
+
+      return member;
+    }).filter(m => m.name && m.phone);
+
+    setPreviewData(processed);
+    setStep('preview');
+    setError('');
+  };
+
+  const handleStartImport = async () => {
+    setStep('processing');
+    let success = 0;
+    let fail = 0;
+
+    for (const member of previewData) {
+      const res = await addMember(member);
+      if (res.success) success++;
+      else fail++;
+    }
+
+    alert(`임포트 완료: 성공 ${success}건, 실패 ${fail}건`);
+    onClose();
+    setStep('upload');
+    setCsvData([]);
   };
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.5)', zIndex: 9999,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '1rem'
-        }}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            style={{
-              background: 'var(--surface-container-high)',
-              border: '1px solid var(--outline-variant)',
-              borderRadius: 'var(--radius-xl)',
-              width: '100%', maxWidth: '600px',
-              display: 'flex', flexDirection: 'column',
-              maxHeight: '90vh'
-            }}
-          >
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>엑셀/CSV 데이터 가져오기</h2>
-              <button onClick={handleClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={24} /></button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)', borderRadius: '1.5rem', width: '100%', maxWidth: '700px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '1.75rem 1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <FileText color="var(--tertiary)" size={28} />
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>회원 데이터 복구 (CSV)</h2>
+              </div>
+              <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', padding: '0.5rem' }}><X size={32} /></button>
             </div>
-            
-            <div style={{ padding: '1.5rem', overflowY: 'auto' }}>
-              {!file ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  <div style={{ background: 'var(--surface-container-low)', padding: '1.5rem', borderRadius: 'var(--radius-md)', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                    <Info size={24} color="var(--tertiary)" style={{ flexShrink: 0 }} />
-                    <div style={{ fontSize: '0.875rem', color: 'var(--on-surface)' }}>
-                      <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>가져오기 가이드</p>
-                      <p style={{ color: 'var(--on-surface-variant)', lineHeight: 1.5 }}>
-                        - 첫 번째 줄은 데이터의 제목(헤더)이어야 합니다.<br />
-                        - 파일 형식이 달라도 다음 단계에서 수동으로 항목을 연결할 수 있습니다.<br />
-                        - 권장 항목: 이름, 전화번호, 벨트, 그랄
-                      </p>
-                    </div>
-                  </div>
 
-                  <input 
-                    type="file" 
-                    accept=".csv" 
-                    onChange={handleFileUpload} 
-                    ref={fileInputRef} 
-                    style={{ display: 'none' }} 
-                  />
-                  
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    style={{
-                      border: '2px dashed var(--outline-variant)', borderRadius: 'var(--radius-lg)',
-                      padding: '3rem 2rem', textAlign: 'center', cursor: 'pointer',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--tertiary)'; e.currentTarget.style.background = 'var(--surface-container-low)' }}
-                    onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--outline-variant)'; e.currentTarget.style.background = 'transparent' }}
-                  >
-                    <UploadCloud size={48} color="var(--on-surface-variant)" />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '1.125rem' }}>CSV 파일 선택</div>
-                      <div style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)', marginTop: '0.25rem' }}>또는 여기에 마우스를 클릭하세요</div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  {isError ? (
-                    <div style={{ background: 'rgba(255, 180, 171, 0.1)', padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', gap: '0.5rem', color: 'var(--error)', alignItems: 'center' }}>
-                      <AlertTriangle size={20} />
-                      <span style={{ fontSize: '0.875rem' }}>파일을 읽는 데失敗했습니다. 올바른 CSV 파일인지 확인해 주세요.</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ background: 'var(--surface-container-low)', padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <span style={{ fontWeight: 600 }}>{file.name}</span>
-                          <span style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)', marginLeft: '1rem' }}>총 {parsedData.length} 명</span>
-                        </div>
-                        <button onClick={resetState} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.875rem' }}>다른 파일 선택</button>
-                      </div>
+            <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
+              {error && <div style={{ background: 'rgba(255,180,171,0.1)', color: 'var(--error)', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1.5rem', border: '1px solid var(--error)', fontSize: '0.875rem' }}>{error}</div>}
 
-                      <div>
-                        <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>데이터 항목 연결</h3>
-                        <p style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)', marginBottom: '1rem' }}>
-                          시스템에 필요한 정보와 파일의 열(Column)을 알맞게 매핑해 주세요. (가장 유사한 헤더를 자동 연결했습니다.)
-                        </p>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                          {EXPECTED_HEADERS.map(expected => (
-                            <div key={expected} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                              <label style={{ fontSize: '0.875rem', fontWeight: 600 }}>{expected} 코어 데이터 {expected === '이름' && <span style={{color: 'var(--error)'}}>*</span>}</label>
-                              <select 
-                                value={headerMapping[expected]} 
-                                onChange={(e) => setHeaderMapping({...headerMapping, [expected]: e.target.value})}
-                                style={{
-                                  background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)',
-                                  padding: '0.75rem', borderRadius: '0.5rem', color: 'var(--on-surface)', outline: 'none'
-                                }}
-                              >
-                                <option value="">-- 제외 --</option>
-                                {headers.map(h => (
-                                  <option key={h} value={h}>{h}</option>
-                                ))}
-                              </select>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-                        <button type="button" onClick={handleClose} style={{ padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>취소</button>
-                        <button type="button" onClick={handleImport} style={{ padding: '0.75rem 1.5rem', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 700 }}>가져오기 완료</button>
-                      </div>
-                    </>
-                  )}
+              {step === 'upload' && (
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ border: '2px dashed var(--outline-variant)', borderRadius: '1rem', padding: '4rem 2rem', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s' }}
+                  onMouseOver={e => e.currentTarget.style.borderColor = 'var(--tertiary)'}
+                  onMouseOut={e => e.currentTarget.style.borderColor = 'var(--outline-variant)'}
+                >
+                  <Upload size={48} color="var(--on-surface-variant)" style={{ marginBottom: '1rem', opacity: 0.5 }} />
+                  <p style={{ fontWeight: 600, color: 'var(--on-surface)', marginBottom: '0.5rem' }}>여기를 눌러 CSV 파일을 선택하세요</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>다른 도장 관리 프로그램의 엑셀 데이터도 자동으로 매핑됩니다.</p>
+                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{ display: 'none' }} />
                 </div>
               )}
+
+              {step === 'mapping' && (
+                <div>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)', marginBottom: '1rem' }}>CSV의 각 열이 시스템의 어떤 정보인지 확인해 주세요.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.75rem' }}>
+                    {Object.keys(EXPECTED_FIELDS).map(sysField => (
+                      <div key={sysField} style={{ background: 'var(--surface-container-low)', padding: '0.75rem 1rem', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{EXPECTED_FIELDS[sysField][0]}</span>
+                        <select 
+                          value={fieldMapping[sysField] || ''} 
+                          onChange={e => setFieldMapping({...fieldMapping, [sysField]: e.target.value})}
+                          style={{ background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)', borderRadius: '0.5rem', color: 'var(--on-surface)', padding: '0.375rem', fontSize: '0.8125rem', width: '160px' }}
+                        >
+                          <option value="">-- 선택 안함 --</option>
+                          {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {step === 'preview' && (
+                <div>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)', marginBottom: '1rem' }}>총 <strong>{previewData.length}명</strong>의 데이터를 발견했습니다. 상위 5명을 미리 보여드립니다.</p>
+                  <div style={{ overflowX: 'auto', border: '1px solid var(--outline-variant)', borderRadius: '0.75rem' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                      <thead style={{ background: 'var(--surface-container-highest)' }}>
+                        <tr><th style={{ padding: '0.75rem' }}>이름</th><th style={{ padding: '0.75rem' }}>번호</th><th style={{ padding: '0.75rem' }}>요금제</th><th style={{ padding: '0.75rem' }}>만료일</th></tr>
+                      </thead>
+                      <tbody>
+                        {previewData.slice(0, 5).map((m, i) => (
+                          <tr key={i} style={{ borderTop: '1px solid var(--outline-variant)' }}>
+                            <td style={{ padding: '0.75rem' }}>{m.name}</td>
+                            <td style={{ padding: '0.75rem' }}>{m.phone}</td>
+                            <td style={{ padding: '0.75rem' }}>{m.plans[0]?.name || '-'}</td>
+                            <td style={{ padding: '0.75rem' }}>{m.expireDate || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {step === 'processing' && (
+                <div style={{ textAlign: 'center', padding: '3rem' }}>
+                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} style={{ display: 'inline-block', marginBottom: '1rem' }}>
+                    <Upload size={40} color="var(--tertiary)" />
+                  </motion.div>
+                  <p style={{ fontWeight: 600 }}>서버에 업로드 중입니다...</p>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>잠시만 기다려 주세요.</p>
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '1.25rem 1.5rem', borderTop: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
+              {(step === 'mapping' || step === 'preview') && (
+                <button 
+                  onClick={handleReset} 
+                  style={{ background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)', padding: '0.75rem 1.25rem', borderRadius: '0.75rem', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  다른 파일 선택
+                </button>
+              )}
+              <div style={{ display: 'flex', gap: '0.75rem', marginLeft: 'auto' }}>
+                {step === 'mapping' && <button onClick={handleApplyMapping} className="btn-primary" style={{ background: 'var(--tertiary)', color: '#000', padding: '1rem 2rem', borderRadius: '0.75rem', fontSize: '1.125rem', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>다음 단계 <ArrowRight size={20} /></button>}
+                {step === 'preview' && (
+                  <>
+                    <button onClick={() => setStep('mapping')} style={{ background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', padding: '1rem 2rem', borderRadius: '0.75rem', fontSize: '1.125rem', fontWeight: 600, cursor: 'pointer' }}>이전</button>
+                    <button onClick={handleStartImport} className="btn-primary" style={{ background: 'var(--tertiary)', color: '#000', padding: '1rem 2rem', borderRadius: '0.75rem', fontSize: '1.125rem', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>가져오기 시작 <Check size={20} /></button>
+                  </>
+                )}
+              </div>
             </div>
           </motion.div>
         </div>

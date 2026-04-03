@@ -31,10 +31,11 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
     gral: 0,
     registerDate: new Date().toISOString().split('T')[0],
     startDate: new Date().toISOString().split('T')[0],
-    planId: '',
+    planQs: {} as Record<string, number>,
     paymentAmount: 0,
     paymentMethod: '카드 결제',
-    memo: ''
+    memo: '',
+    remainingQty: 0 // 수정 시 사용
   });
   const [error, setError] = useState('');
 
@@ -47,30 +48,44 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
         gral: memberToEdit.gral,
         registerDate: memberToEdit.registerDate,
         startDate: memberToEdit.startDate,
-        planId: '', // Todo: 기존 plan 매핑 보완
+        planQs: memberToEdit.plans.reduce((acc, p) => {
+          const matched = customPlans.find(cp => cp.name === p.name);
+          if (matched) {
+            acc[matched.id] = (acc[matched.id] || 0) + 1;
+          }
+          return acc;
+        }, {} as Record<string, number>),
         paymentAmount: memberToEdit.paymentAmount,
         paymentMethod: memberToEdit.paymentMethod,
-        memo: memberToEdit.memo
+        memo: memberToEdit.memo,
+        remainingQty: memberToEdit.plans.find(p => p.type === '횟수권')?.remainingQty ?? 0
       });
     } else {
       setFormData({
         name: '', phone: '', belt: '화이트', gral: 0,
         registerDate: new Date().toISOString().split('T')[0],
         startDate: new Date().toISOString().split('T')[0],
-        planId: '', paymentAmount: 0, paymentMethod: '카드 결제', memo: ''
+        planQs: {}, paymentAmount: 0, paymentMethod: '카드 결제', memo: '', remainingQty: 0
       });
     }
     setError('');
-  }, [memberToEdit, isOpen]);
+  }, [memberToEdit, isOpen, customPlans]);
 
-  // 요금제 변경 시 금액 자동 설정
-  const handlePlanChange = (planId: string) => {
-    const selectedPlan = customPlans.find(p => p.id === planId);
-    setFormData(prev => ({
-      ...prev,
-      planId,
-      paymentAmount: selectedPlan ? selectedPlan.price : prev.paymentAmount
-    }));
+  // 요금제 수량 조절
+  const handleQtyChange = (planId: string, delta: number) => {
+    setFormData(prev => {
+      const currentQty = prev.planQs[planId] || 0;
+      const newQty = Math.max(0, currentQty + delta);
+      const newPlanQs = { ...prev.planQs, [planId]: newQty };
+      if (newQty === 0) delete newPlanQs[planId];
+
+      const totalAmount = Object.entries(newPlanQs).reduce((sum, [id, qty]) => {
+        const p = customPlans.find(cp => cp.id === id);
+        return sum + (p ? p.price * qty : 0);
+      }, 0);
+
+      return { ...prev, planQs: newPlanQs, paymentAmount: totalAmount };
+    });
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,19 +94,37 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
     e.preventDefault();
     setIsSubmitting(true);
     
-    // 선택된 요금제 기준으로 만료일 계산
     let expireDate = '';
-    const selectedPlan = customPlans.find(p => p.id === formData.planId);
-    let plansArr: { name: string, qty: number }[] = [];
+    let totalMonths = 0;
+    let plansArr: any[] = [];
     
-    if (selectedPlan) {
-      plansArr = [{ name: selectedPlan.name, qty: selectedPlan.type === '횟수권' ? (selectedPlan.defaultQty || 1) : 1 }];
-      const start = new Date(formData.startDate);
-      start.setMonth(start.getMonth() + selectedPlan.months);
+    Object.entries(formData.planQs).forEach(([id, qty]) => {
+      const p = customPlans.find(cp => cp.id === id);
+      if (p && qty > 0) {
+        totalMonths += (p.months || 0) * qty;
+        for (let i = 0; i < qty; i++) {
+          plansArr.push({
+            name: p.name,
+            qty: p.type === '횟수권' ? (p.defaultQty || 1) : 1,
+            remainingQty: p.type === '횟수권' ? (p.defaultQty || 1) : undefined,
+            type: p.type
+          });
+        }
+      }
+    });
+
+    const start = new Date(formData.startDate);
+    if (totalMonths > 0) {
+      start.setMonth(start.getMonth() + totalMonths);
       expireDate = start.toISOString().split('T')[0];
     } else if (memberToEdit) {
       expireDate = memberToEdit.expireDate;
-      plansArr = memberToEdit.plans;
+      plansArr = memberToEdit.plans.map(p => {
+        if (p.type === '횟수권') {
+          return { ...p, remainingQty: formData.remainingQty };
+        }
+        return p;
+      });
     }
 
     const payload = {
@@ -144,9 +177,9 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
               maxHeight: '90vh', overflowY: 'auto'
             }}
           >
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface-container-high)', zIndex: 10 }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>{memberToEdit ? '회원 정보 수정' : '신규 회원 등록'}</h2>
-              <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={24} /></button>
+            <div style={{ padding: '1.75rem 1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface-container-high)', zIndex: 10 }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>{memberToEdit ? '회원 정보 수정' : '신규 회원 등록'}</h2>
+              <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', padding: '0.5rem' }}><X size={32} /></button>
             </div>
             
             <form onSubmit={handleSubmit} style={{ padding: isMobile ? '1.25rem' : '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -201,15 +234,51 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>요금제 선택 <span style={{color: 'var(--error)'}}>*</span></label>
-                <select required value={formData.planId} onChange={e => handlePlanChange(e.target.value)} style={{ background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)', padding: '0.75rem', borderRadius: '0.5rem', color: 'var(--on-surface)', outline: 'none', fontSize: '0.875rem' }}>
-                  <option value="">-- 요금제 선택 --</option>
-                  {customPlans.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.price.toLocaleString()}원)</option>
-                  ))}
-                </select>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>요금제 선택 및 수량 <span style={{color: 'var(--error)'}}>*</span></label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--surface-container-low)', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--outline-variant)', maxHeight: '250px', overflowY: 'auto' }}>
+                  {customPlans.length === 0 && <span style={{fontSize: '0.75rem', color: 'var(--on-surface-variant)'}}>등록된 요금제가 없습니다.</span>}
+                  {customPlans.map(p => {
+                    const qty = formData.planQs[p.id] || 0;
+                    return (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--outline-variant)', borderBottomStyle: 'none' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{p.name}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>{p.price.toLocaleString()}원 / {p.months}개월</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <button 
+                            type="button" 
+                            onClick={() => handleQtyChange(p.id, -1)} 
+                            style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}
+                          >−</button>
+                          <span style={{ minWidth: '20px', textAlign: 'center', fontWeight: 700, fontSize: '1rem' }}>{qty}</span>
+                          <button 
+                            type="button" 
+                            onClick={() => handleQtyChange(p.id, 1)} 
+                            style={{ width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: 'var(--primary)', color: '#000', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}
+                          >+</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+
+              {memberToEdit && memberToEdit.plans.some(p => p.type === '횟수권') && Object.keys(formData.planQs).length === 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255,183,0,0.05)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid rgba(255,183,0,0.2)' }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#ffb700' }}>⚠️ 잔여 횟수 직접 수정</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <input 
+                      type="number" 
+                      value={formData.remainingQty} 
+                      onChange={e => setFormData({...formData, remainingQty: Number(e.target.value)})} 
+                      style={{ width: '80px', background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)', padding: '0.5rem', borderRadius: '0.4rem', color: 'var(--on-surface)', fontSize: '0.9375rem', fontWeight: 700 }}
+                    />
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>기존 횟수권의 남은 횟수를 직접 수정합니다.</span>
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -232,9 +301,9 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
                 <textarea value={formData.memo} onChange={e => setFormData({...formData, memo: e.target.value})} rows={2} style={{ background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)', padding: '0.75rem', borderRadius: '0.5rem', color: 'var(--on-surface)', fontSize: '0.875rem', resize: 'vertical' }} placeholder="도복 포함, 특이사항 등"/>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '0.75rem' }}>
-                <button type="button" onClick={onClose} disabled={isSubmitting} style={{ flex: isMobile ? 1 : 'unset', padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>취소</button>
-                <button type="submit" disabled={isSubmitting} style={{ flex: isMobile ? 1 : 'unset', padding: '0.75rem 1.5rem', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem', paddingBottom: '0.5rem' }}>
+                <button type="button" onClick={onClose} disabled={isSubmitting} style={{ flex: isMobile ? 1 : 'unset', padding: '1rem 2rem', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.75rem', cursor: 'pointer', fontWeight: 600, fontSize: '1.125rem' }}>취소</button>
+                <button type="submit" disabled={isSubmitting} style={{ flex: isMobile ? 1 : 'unset', padding: '1rem 2.5rem', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '0.75rem', cursor: 'pointer', fontWeight: 800, fontSize: '1.125rem' }}>
                   {isSubmitting ? '처리 중...' : (memberToEdit ? '저장' : '등록')}
                 </button>
               </div>

@@ -149,9 +149,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             }}
           >
             {/* 헤더 */}
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>도장 설정</h2>
-              <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}><X size={24} /></button>
+            <div style={{ padding: '1.75rem 1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>도장 설정</h2>
+              <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', padding: '0.5rem' }}><X size={32} /></button>
             </div>
 
             {/* 탭 */}
@@ -267,10 +267,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </div>
 
             {/* 푸터 */}
-            <div style={{ padding: isMobile ? '1rem 1.25rem' : '1rem 1.5rem', borderTop: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexShrink: 0 }}>
-              <button onClick={onClose} style={{ flex: isMobile ? 1 : 'unset', height: '44px', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.75rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>닫기</button>
+            <div style={{ padding: isMobile ? '1rem 1.25rem' : '1.25rem 1.5rem', borderTop: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'flex-end', gap: '1rem', flexShrink: 0 }}>
+              <button onClick={onClose} style={{ flex: isMobile ? 1 : 'unset', padding: '1rem 2rem', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.75rem', cursor: 'pointer', fontSize: '1.125rem', fontWeight: 600 }}>닫기</button>
               {activeTab === 'general' && (
-                <button onClick={handleSaveGeneral} disabled={isSubmitting} style={{ flex: isMobile ? 1 : 'unset', height: '44px', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '0.75rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>
+                <button onClick={handleSaveGeneral} disabled={isSubmitting} style={{ flex: isMobile ? 1 : 'unset', padding: '1rem 2rem', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '0.75rem', cursor: 'pointer', fontWeight: 800, fontSize: '1.125rem' }}>
                   {isSubmitting ? '저장 중...' : '저장'}
                 </button>
               )}
