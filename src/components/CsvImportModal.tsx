@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, Check, FileText, ArrowRight } from 'lucide-react';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { useStore } from '../store/useStore';
 
 // 자동 매핑용 유의어 사전
@@ -53,10 +54,15 @@ export default function CsvImportModal() {
   }, [isOpen, handleReset]);
 
   // 날짜 형식 표준화 (YYYY-MM-DD)
-  const formatDate = (val: string) => {
+  const formatDate = (val: any) => {
     if (!val) return '';
     try {
-      const clean = val.replace(/[^0-9/-]/g, '-').replace(/\./g, '-');
+      // 엑셀 날짜 형식(숫자) 처리
+      if (typeof val === 'number') {
+        const d = XLSX.SSF.parse_date_code(val);
+        return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+      }
+      const clean = val.toString().replace(/[^0-9/-]/g, '-').replace(/\./g, '-');
       const d = new Date(clean);
       if (isNaN(d.getTime())) return '';
       return d.toISOString().split('T')[0];
@@ -66,43 +72,63 @@ export default function CsvImportModal() {
   // 전화번호 형식 표준화
   const formatPhone = (val: string) => {
     if (!val) return '';
-    const digits = val.replace(/[^0-9]/g, '');
+    const digits = val.toString().replace(/[^0-9]/g, '');
     if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
     return digits;
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        if (results.data.length === 0) {
-          setError('파일에 데이터가 없습니다.');
-          return;
-        }
-        
-        const csvHeaders = Object.keys(results.data[0] as any);
-        setCsvData(results.data);
-        setHeaders(csvHeaders);
-        
-        // 지능형 자동 매핑
-        const initialMapping: Record<string, string> = {};
-        Object.entries(EXPECTED_FIELDS).forEach(([sysField, synonyms]) => {
-          const matched = csvHeaders.find(h => 
-            synonyms.some(s => h.toLowerCase().includes(s.toLowerCase()))
-          );
-          if (matched) initialMapping[sysField] = matched;
-        });
-        
-        setFieldMapping(initialMapping);
-        setStep('mapping');
-        setError('');
-      },
-      error: (err) => setError(`CSV 파싱 오류: ${err.message}`)
+    const isCsv = file.name.endsWith('.csv');
+    const isXlsx = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+
+    if (isCsv) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => processParsedData(results.data),
+        error: (err) => setError(`CSV 파싱 오류: ${err.message}`)
+      });
+    } else if (isXlsx) {
+      try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
+        processParsedData(json);
+      } catch (err: any) {
+        setError(`엑셀 파싱 오류: ${err.message}`);
+      }
+    } else {
+      setError('지원하지 않는 파일 형식입니다. (.csv, .xlsx, .xls 파일만 가능)');
+    }
+  };
+
+  const processParsedData = (data: any[]) => {
+    if (data.length === 0) {
+      setError('파일에 데이터가 없습니다.');
+      return;
+    }
+    
+    const csvHeaders = Object.keys(data[0] as any);
+    setCsvData(data);
+    setHeaders(csvHeaders);
+    
+    // 지능형 자동 매핑
+    const initialMapping: Record<string, string> = {};
+    Object.entries(EXPECTED_FIELDS).forEach(([sysField, synonyms]) => {
+      const matched = csvHeaders.find(h => 
+        synonyms.some(s => h.toLowerCase().includes(s.toLowerCase()))
+      );
+      if (matched) initialMapping[sysField] = matched;
     });
+    
+    setFieldMapping(initialMapping);
+    setStep('mapping');
+    setError('');
   };
 
   const handleApplyMapping = () => {
@@ -233,7 +259,7 @@ export default function CsvImportModal() {
                   <Upload size={48} color="var(--on-surface-variant)" style={{ marginBottom: '1rem', opacity: 0.5 }} />
                   <p style={{ fontWeight: 600, color: 'var(--on-surface)', marginBottom: '0.5rem' }}>여기를 눌러 CSV 파일을 선택하세요</p>
                   <p style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>다른 도장 관리 프로그램의 엑셀 데이터도 자동으로 매핑됩니다.</p>
-                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{ display: 'none' }} />
+                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv, .xlsx, .xls" style={{ display: 'none' }} />
                 </div>
               )}
 
