@@ -234,9 +234,28 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
                 </div>
               </div>
 
+              {/* 횟수권 회원의 경우 잔여 횟수 수정 필드 노출 */}
+              {memberToEdit && memberToEdit.plans.some(p => p.type === '횟수권') && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--surface-container-lowest)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--primary-container)' }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--primary)' }}>기존 횟수권 잔여 횟수 수정</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <input 
+                      type="number" 
+                      value={formData.remainingQty} 
+                      onChange={e => setFormData({...formData, remainingQty: Number(e.target.value)})} 
+                      style={{ width: '100px', background: 'var(--surface-container-low)', border: '1px solid var(--primary)', padding: '0.75rem', borderRadius: '0.5rem', color: 'var(--on-surface)', fontSize: '1rem', fontWeight: 800, textAlign: 'center' }}
+                    />
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)', lineHeight: 1.4 }}>
+                      현재 등록된 횟수권의 남은 횟수를 직접 수정할 수 있습니다.<br/>
+                      <small>(새로운 요금제를 결제하는 경우 이 값은 무시됩니다.)</small>
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>요금제 선택 및 수량 <span style={{color: 'var(--error)'}}>*</span></label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--surface-container-low)', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--outline-variant)', maxHeight: '250px', overflowY: 'auto' }}>
+                <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>요금제 연장/새 결제 <span style={{fontSize: '0.7rem', color: 'var(--on-surface-variant)', fontWeight: 400}}>(선택 시 금액/기간 자동 합산)</span></label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--surface-container-low)', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--outline-variant)', maxHeight: '200px', overflowY: 'auto' }}>
                   {customPlans.length === 0 && <span style={{fontSize: '0.75rem', color: 'var(--on-surface-variant)'}}>등록된 요금제가 없습니다.</span>}
                   {customPlans.map(p => {
                     const qty = formData.planQs[p.id] || 0;
@@ -264,21 +283,6 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
                   })}
                 </div>
               </div>
-
-              {memberToEdit && memberToEdit.plans.some(p => p.type === '횟수권') && Object.keys(formData.planQs).length === 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255,183,0,0.05)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid rgba(255,183,0,0.2)' }}>
-                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#ffb700' }}>⚠️ 잔여 횟수 직접 수정</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <input 
-                      type="number" 
-                      value={formData.remainingQty} 
-                      onChange={e => setFormData({...formData, remainingQty: Number(e.target.value)})} 
-                      style={{ width: '80px', background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)', padding: '0.5rem', borderRadius: '0.4rem', color: 'var(--on-surface)', fontSize: '0.9375rem', fontWeight: 700 }}
-                    />
-                    <span style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>기존 횟수권의 남은 횟수를 직접 수정합니다.</span>
-                  </div>
-                </div>
-              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
