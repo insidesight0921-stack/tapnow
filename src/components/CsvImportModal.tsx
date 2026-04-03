@@ -81,15 +81,16 @@ export default function CsvImportModal() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const isCsv = file.name.endsWith('.csv');
-    const isXlsx = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    const fileName = file.name.toLowerCase();
+    const isCsv = fileName.endsWith('.csv');
+    const isXlsx = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
 
     if (isCsv) {
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => processParsedData(results.data),
-        error: (err) => setError(`CSV 파싱 오류: ${err.message}`)
+        error: (err) => setError(`파일 파싱 오류: ${err.message}`)
       });
     } else if (isXlsx) {
       try {
@@ -149,10 +150,10 @@ export default function CsvImportModal() {
         registerDate: formatDate(row[fieldMapping['registerDate']]) || today,
         startDate: formatDate(row[fieldMapping['startDate']]) || today,
         expireDate: formatDate(row[fieldMapping['expireDate']]) || '',
-        memo: row[fieldMapping['memo']] || 'CSV 복구',
+        memo: row[fieldMapping['memo']] || '데이터 복구',
         plans: [],
         paymentAmount: 0,
-        paymentMethod: 'CSV 복구'
+        paymentMethod: '데이터 복구'
       };
 
       // 요금제 자동 매핑
@@ -195,7 +196,7 @@ export default function CsvImportModal() {
         }
       }
 
-      // 횟수권인 경우 잔여 횟수 정보가 CSV에 따로 있다면 덮어쓰기
+      // 횟수권인 경우 잔여 횟수 정보가 파일에 따로 있다면 덮어쓰기
       const csvRemQty = row[fieldMapping['remainingQty']];
       if (csvRemQty && member.plans.length > 0) {
         const totalRem = parseInt(csvRemQty.toString().replace(/[^0-9]/g, ''));
@@ -241,7 +242,7 @@ export default function CsvImportModal() {
             <div style={{ padding: '1.75rem 1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <FileText color="var(--tertiary)" size={28} />
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>회원 데이터 복구 (CSV)</h2>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>회원 데이터 복구 (엑셀/CSV)</h2>
               </div>
               <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', padding: '0.5rem' }}><X size={32} /></button>
             </div>
@@ -257,7 +258,7 @@ export default function CsvImportModal() {
                   onMouseOut={e => e.currentTarget.style.borderColor = 'var(--outline-variant)'}
                 >
                   <Upload size={48} color="var(--on-surface-variant)" style={{ marginBottom: '1rem', opacity: 0.5 }} />
-                  <p style={{ fontWeight: 600, color: 'var(--on-surface)', marginBottom: '0.5rem' }}>여기를 눌러 CSV 파일을 선택하세요</p>
+                  <p style={{ fontWeight: 600, color: 'var(--on-surface)', marginBottom: '0.5rem' }}>여기를 눌러 엑셀 또는 CSV 파일을 선택하세요</p>
                   <p style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>다른 도장 관리 프로그램의 엑셀 데이터도 자동으로 매핑됩니다.</p>
                   <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv, .xlsx, .xls" style={{ display: 'none' }} />
                 </div>
@@ -265,7 +266,7 @@ export default function CsvImportModal() {
 
               {step === 'mapping' && (
                 <div>
-                  <p style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)', marginBottom: '1rem' }}>CSV의 각 열이 시스템의 어떤 정보인지 확인해 주세요.</p>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)', marginBottom: '1rem' }}>파일의 각 열이 시스템의 어떤 정보인지 확인해 주세요.</p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.75rem' }}>
                     {Object.keys(EXPECTED_FIELDS).map(sysField => (
                       <div key={sysField} style={{ background: 'var(--surface-container-low)', padding: '0.75rem 1rem', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
