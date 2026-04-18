@@ -7,6 +7,7 @@ import { useStore, type Member } from '../store/useStore';
 export default function KioskPage() {
   const navigate = useNavigate();
   const gymName = useStore(state => state.gymName);
+  const logout = useStore(state => state.logout);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   useEffect(() => {
@@ -14,6 +15,33 @@ export default function KioskPage() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const [isAdminPinModalOpen, setIsAdminPinModalOpen] = useState(false);
+  const [enteredAdminPin, setEnteredAdminPin] = useState('');
+  const [adminPinError, setAdminPinError] = useState(false);
+  const gymPin = useStore(state => state.gymPin);
+
+  const handleAdminClick = () => {
+    setIsAdminPinModalOpen(true);
+    setEnteredAdminPin('');
+    setAdminPinError(false);
+  };
+
+  const handleAdminPinSubmit = (val: string) => {
+    const newPin = enteredAdminPin + val;
+    if (newPin.length < 4) {
+      setEnteredAdminPin(newPin);
+      return;
+    }
+
+    if (newPin === gymPin) {
+      navigate('/admin/members');
+    } else {
+      setEnteredAdminPin('');
+      setAdminPinError(true);
+      setTimeout(() => setAdminPinError(false), 2000);
+    }
+  };
 
   return (
     <div style={{
@@ -28,7 +56,7 @@ export default function KioskPage() {
     }}>
       {/* 돌아가기 버튼 - 상단 우측 */}
       <button
-        onClick={() => navigate('/admin/members')}
+        onClick={handleAdminClick}
         style={{
           position: isMobile ? 'absolute' : 'fixed',
           top: isMobile ? '1rem' : '1.5rem',
@@ -61,6 +89,78 @@ export default function KioskPage() {
         {isMobile ? '관리자' : '관리자 화면으로 돌아가기'}
       </button>
 
+      {/* 관리자 PIN 입력 모달 */}
+      <AnimatePresence>
+        {isAdminPinModalOpen && (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+            backdropFilter: 'blur(10px)'
+          }}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              style={{
+                background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)',
+                padding: '2.5rem', borderRadius: '2rem', width: '100%', maxWidth: '360px', textAlign: 'center'
+              }}
+            >
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.5rem' }}>관리자 인증</h3>
+              <p style={{ color: 'var(--on-surface-variant)', fontSize: '0.9375rem', marginBottom: '2rem' }}>접근을 위해 PIN 4자리를 입력하세요</p>
+              
+              <div style={{
+                fontSize: '2rem', letterSpacing: '1.5rem', fontWeight: 900, marginBottom: '2rem',
+                color: adminPinError ? 'var(--error)' : 'var(--primary)',
+                transition: 'color 0.2s'
+              }}>
+                {enteredAdminPin.padEnd(4, '•')}
+              </div>
+
+              {adminPinError && (
+                <div style={{ color: 'var(--error)', fontSize: '0.875rem', fontWeight: 700, marginBottom: '1rem' }}>
+                  PIN 번호가 일치하지 않습니다.
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0, 'X'].map(val => (
+                  <button
+                    key={val}
+                    onClick={() => {
+                      if (val === 'C') { setEnteredAdminPin(''); setAdminPinError(false); }
+                      else if (val === 'X') setIsAdminPinModalOpen(false);
+                      else handleAdminPinSubmit(val.toString());
+                    }}
+                    style={{
+                      padding: '1.25rem 0', borderRadius: '1rem', background: 'var(--surface-container-low)',
+                      border: '1px solid var(--outline-variant)', color: 'var(--on-surface)',
+                      fontSize: '1.25rem', fontWeight: 700, cursor: 'pointer'
+                    }}
+                  >{val}</button>
+                ))}
+              </div>
+
+              <button 
+                onClick={async () => {
+                  if (window.confirm('관리자 계정으로 다시 로그인하여 관리자 페이지로 진입하시겠습니까?')) {
+                    await logout();
+                    navigate('/login');
+                  }
+                }}
+                style={{ 
+                  marginTop: '1.5rem', background: 'transparent', border: 'none', 
+                  color: 'var(--on-surface-variant)', textDecoration: 'underline', 
+                  fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' 
+                }}
+              >
+                PIN을 잊으셨나요? 관리자 계정으로 재인증
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <KioskCard gymName={gymName} isMobile={isMobile} />
     </div>
   );
@@ -76,7 +176,7 @@ function KioskCard({ gymName, isMobile }: { gymName: string, isMobile: boolean }
   const [checkedName, setCheckedName] = useState('');
   const [matchingMembers, setMatchingMembers] = useState<Member[]>([]);
   const [statusMsg, setStatusMsg] = useState('');
-  const [checkedInfo, setCheckedInfo] = useState<{ remaining?: number, isWarning: boolean } | null>(null);
+  const [checkedInfo, setCheckedInfo] = useState<{ remaining?: number, dday?: number, isWarning: boolean, type?: '기간권' | '횟수권' } | null>(null);
 
   const handleNumberClick = (num: string) => {
     if (status !== 'IDLE' && status !== 'MULTIPLE') { 
@@ -108,12 +208,26 @@ function KioskCard({ gymName, isMobile }: { gymName: string, isMobile: boolean }
       setStatusMsg(res.message);
       
       const ticketPlans = member.plans.filter(p => p.type === '횟수권');
+
       if (ticketPlans.length > 0) {
         const totalRem = ticketPlans.reduce((s, p) => s + (p.remainingQty ?? 0), 0);
-        // markAttendance에서 이미 차감되었으므로 -1된 값이 실제 UI에 표시됨
         setCheckedInfo({ 
           remaining: totalRem - 1, 
-          isWarning: res.message.includes('부족') 
+          isWarning: res.message.includes('부족'),
+          type: '횟수권'
+        });
+      } else if (member.expireDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const target = new Date(member.expireDate);
+        target.setHours(0, 0, 0, 0);
+        const diffTime = target.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        setCheckedInfo({
+          dday: diffDays,
+          isWarning: diffDays < 0,
+          type: '기간권'
         });
       }
       setStatus('SUCCESS');
@@ -283,7 +397,13 @@ function KioskCard({ gymName, isMobile }: { gymName: string, isMobile: boolean }
                   {status === 'SUCCESS' ? <CheckCircle2 size={20} /> : status === 'ALREADY' ? <AlertCircle size={20} /> : <XCircle size={20} />}
                   <span style={{ textOverflow: 'ellipsis', overflow: 'hidden' }}>
                     {status === 'SUCCESS' ? (
-                       `${checkedName}님 ${checkedInfo?.isWarning ? '횟수 부족(보충)' : '출석 완료'}! ${checkedInfo?.remaining !== undefined ? `(남은 횟수: ${checkedInfo.remaining}회)` : ''}`
+                       `${checkedName}님 ${checkedInfo?.isWarning && checkedInfo.type === '횟수권' ? '횟수 부족(보충)' : '출석 완료'}! ${
+                         checkedInfo?.type === '횟수권' && checkedInfo.remaining !== undefined 
+                           ? `(남은 횟수: ${checkedInfo.remaining}회)` 
+                           : checkedInfo?.type === '기간권' && checkedInfo.dday !== undefined
+                             ? `(D-${checkedInfo.dday === 0 ? 'Day' : checkedInfo.dday})`
+                             : ''
+                       }`
                     ) : statusMsg}
                   </span>
                 </motion.div>

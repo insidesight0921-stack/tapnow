@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 슈퍼 관리자 확인 함수
+    function isSuperAdmin() {
+      return request.auth != null && request.auth.token.email == 'hjbyun0921@naver.com';
+    }
+
+    // 도장(Gym) 컬렉션 보호
+    match /gyms/{gymId} {
+      // 읽기는 인증된 사용자(본인 및 슈퍼 관리자)만 허용
+      allow read: if request.auth != null;
+      // 쓰기는 본인의 UID가 도장 ID와 일치하거나 슈퍼 관리자일 때만 허용
+      allow write: if request.auth != null && (request.auth.uid == gymId || isSuperAdmin());
+    }
+
+    // 기타 컬렉션 (members, attendances, plans, payments) 보호
+    // 각 문서에는 gymId 필드가 있어야 하며, 해당 문서의 gymId가 본인의 UID와 일치해야 접근 가능
+    match /members/{document=**} {
+      allow read, update, delete: if request.auth != null && (resource.data.gymId == request.auth.uid || isSuperAdmin());
+      allow create: if request.auth != null && (request.resource.data.gymId == request.auth.uid || isSuperAdmin());
+    }
+    
+    match /attendances/{document=**} {
+      allow read, update, delete: if request.auth != null && (resource.data.gymId == request.auth.uid || isSuperAdmin());
+      allow create: if request.auth != null && (request.resource.data.gymId == request.auth.uid || isSuperAdmin());
+    }
+    
+    match /plans/{document=**} {
+      allow read, update, delete: if request.auth != null && (resource.data.gymId == request.auth.uid || isSuperAdmin());
+      allow create: if request.auth != null && (request.resource.data.gymId == request.auth.uid || isSuperAdmin());
+    }
+    
+    match /payments/{document=**} {
+      allow read, update, delete: if request.auth != null && (resource.data.gymId == request.auth.uid || isSuperAdmin());
+      allow create: if request.auth != null && (request.resource.data.gymId == request.auth.uid || isSuperAdmin());
+    }
+  }
+}

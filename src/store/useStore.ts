@@ -164,6 +164,32 @@ interface AppState extends AppData {
 
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
+const cleanData = (obj: any): any => {
+  if (obj === undefined) return null;
+  if (Number.isNaN(obj)) return 0;
+  
+  if (Array.isArray(obj)) {
+    return obj
+      .filter(v => v !== undefined && !Number.isNaN(v))
+      .map(v => cleanData(v));
+  }
+  
+  if (obj !== null && typeof obj === 'object') {
+    const newObj: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined && !Number.isNaN(value)) {
+        const cleaned = cleanData(value);
+        if (cleaned !== undefined) {
+          newObj[key] = cleaned;
+        }
+      }
+    }
+    return newObj;
+  }
+  
+  return obj;
+};
+
 export const useStore = create<AppState>((set, get) => ({
   members: [],
   plans: [],
@@ -319,7 +345,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   addGymAccount: async (gym) => {
-    await addDoc(collection(db, 'gyms'), gym);
+    await addDoc(collection(db, 'gyms'), cleanData(gym));
   },
 
   updateGymAccount: async (id, fields) => {
@@ -395,16 +421,25 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     try {
-      await addDoc(collection(db, 'members'), { ...member, gymId });
+      const cleanedMember = cleanData(member);
+      await addDoc(collection(db, 'members'), { ...cleanedMember, gymId });
       return { success: true, message: '회원이 성공적으로 등록되었습니다.' };
-    } catch (err) {
+    } catch (err: any) {
       console.error('Add Member Error:', err);
-      return { success: false, message: '서버 오류로 인해 회원 등록에 실패했습니다.' };
+      // 에러 메시지에 더 상세한 정보 포함 (개발 단계 디버깅 용이)
+      const errorMsg = err?.message || '알 수 없는 서버 오류';
+      return { success: false, message: `회원 등록 실패: ${errorMsg}` };
     }
   },
 
   updateMember: async (id, updatedFields) => {
-    await updateDoc(doc(db, 'members', id), updatedFields);
+    try {
+      const cleanedFields = cleanData(updatedFields);
+      await updateDoc(doc(db, 'members', id), cleanedFields);
+    } catch (err: any) {
+      console.error('Update Member Error:', err);
+      throw new Error(`회원 정보 수정 실패: ${err?.message || '알 수 없는 서버 오류'}`);
+    }
   },
 
   deleteMember: async (id) => {
@@ -420,13 +455,9 @@ export const useStore = create<AppState>((set, get) => ({
     const { gymId } = get();
     if (!gymId) throw new Error('로그인 정보가 없습니다.');
     try {
-      // undefined 필드 제거
-      const cleanData = Object.fromEntries(
-        Object.entries(plan).filter(([_, v]) => v !== undefined)
-      );
-      
+      const cleanedPlan = cleanData(plan);
       await addDoc(collection(db, 'plans'), { 
-        ...cleanData, 
+        ...cleanedPlan, 
         gymId,
         createdAt: serverTimestamp() 
       });
@@ -438,11 +469,9 @@ export const useStore = create<AppState>((set, get) => ({
 
   updatePlan: async (id, updatedFields) => {
     try {
-      // id 제외 및 undefined 필드 제거
-      const cleanData = Object.fromEntries(
-        Object.entries(updatedFields).filter(([k, v]) => k !== 'id' && v !== undefined)
-      );
-      await updateDoc(doc(db, 'plans', id), cleanData);
+      const cleanedFields = cleanData(updatedFields);
+      delete cleanedFields.id; // id 필드 제외
+      await updateDoc(doc(db, 'plans', id), cleanedFields);
     } catch (err) {
       console.error('Plan update error:', err);
       throw err;
@@ -495,7 +524,8 @@ export const useStore = create<AppState>((set, get) => ({
       const updatedPlans = [...member.plans];
       const p = updatedPlans[targetIdx];
       updatedPlans[targetIdx] = { ...p, remainingQty: Math.max(-99, (p.remainingQty ?? 0) - 1) };
-      await updateDoc(doc(db, 'members', memberId), { plans: updatedPlans });
+      const cleanedPlans = cleanData(updatedPlans);
+      await updateDoc(doc(db, 'members', memberId), { plans: cleanedPlans });
     }
     
     return { 
@@ -533,7 +563,9 @@ export const useStore = create<AppState>((set, get) => ({
             const p = updatedPlans[ticketPlanIndex];
             // 잔여 횟수를 1 증가시킵니다.
             updatedPlans[ticketPlanIndex] = { ...p, remainingQty: (p.remainingQty ?? 0) + 1 };
-            await updateDoc(doc(db, 'members', memberId), { plans: updatedPlans });
+            
+            const cleanedPlans = cleanData(updatedPlans);
+            await updateDoc(doc(db, 'members', memberId), { plans: cleanedPlans });
           }
         }
       }
@@ -573,13 +605,15 @@ export const useStore = create<AppState>((set, get) => ({
       const updatedPlans = [...member.plans];
       const p = updatedPlans[targetIdx];
       updatedPlans[targetIdx] = { ...p, remainingQty: Math.max(-99, (p.remainingQty ?? 0) - 1) };
-      await updateDoc(doc(db, 'members', memberId), { plans: updatedPlans });
+      const cleanedPlans = cleanData(updatedPlans);
+      await updateDoc(doc(db, 'members', memberId), { plans: cleanedPlans });
     }
   },
 
   addPayment: async (payment) => {
     const { gymId } = get();
-    await addDoc(collection(db, 'payments'), { ...payment, gymId });
+    const cleanedPayment = cleanData(payment);
+    await addDoc(collection(db, 'payments'), { ...cleanedPayment, gymId });
   },
 
   updatePaymentStatus: async (id, status) => {
@@ -593,27 +627,27 @@ export const useStore = create<AppState>((set, get) => ({
     const today = new Date();
     const expireDate = new Date(today.getFullYear(), today.getMonth() + months, today.getDate()).toISOString().split('T')[0];
 
-    await updateDoc(doc(db, 'gyms', gymId), { 
+    await updateDoc(doc(db, 'gyms', gymId), cleanData({ 
       plan, 
       planExpireDate: expireDate,
       status: 'active' 
-    });
+    }));
     
     // 결제 내역에도 추가
-    await addDoc(collection(db, 'payments'), {
+    await addDoc(collection(db, 'payments'), cleanData({
       gymId,
       amount: plan === 'plus' ? 14900 * months : plan === 'basic' ? 6900 * months : 0,
       item: `${plan.toUpperCase()} 요금제 (${months}개월)`,
       date: new Date().toISOString().split('T')[0],
       status: 'paid',
       method: 'toss'
-    });
+    }));
   },
 
   updateSettings: async (theme, profileImage) => {
     const { gymId } = get();
     if (gymId && gymId !== 'ALL') {
-      await updateDoc(doc(db, 'gyms', gymId), { theme, profileImage });
+      await updateDoc(doc(db, 'gyms', gymId), cleanData({ theme, profileImage }));
       set({ theme, profileImage });
     }
   },

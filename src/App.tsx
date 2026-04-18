@@ -9,6 +9,7 @@ import AttendancePage from './pages/AttendancePage';
 import PaymentPage from './pages/PaymentPage';
 import PlanPage from './pages/PlanPage';
 import SuperAdminPage from './pages/SuperAdminPage';
+import SettingsPage from './pages/SettingsPage';
 
 // 일반 도장 관리자 전용 가드
 const GymAdminRoute = ({ children }: { children: React.ReactNode }) => {
@@ -78,6 +79,7 @@ function App() {
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="payments" element={<PaymentPage />} />
         <Route path="plan" element={<PlanPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       {/* 슈퍼 관리자(본사) 대시보드 */}

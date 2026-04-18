@@ -104,6 +104,7 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
           padding: '1rem'
         }}>
           <motion.div
+            className="modal-content-base"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
@@ -112,17 +113,15 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
               border: '1px solid var(--outline-variant)',
               borderRadius: 'var(--radius-xl)',
               width: '100%', maxWidth: '600px',
-              padding: isMobile ? '0' : '0',
-              display: 'flex', flexDirection: 'column',
-              maxHeight: '90vh'
+              padding: isMobile ? '0' : '0'
             }}
           >
-            <div style={{ padding: '1.75rem 1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '1.75rem 1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>요금제 관리</h2>
               <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', padding: '0.5rem' }}><X size={32} /></button>
             </div>
             
-            <div style={{ padding: isMobile ? '1.25rem' : '1.5rem', overflowY: 'auto', flex: 1, minHeight: '300px' }}>
+            <div className="modal-body-scroll" style={{ padding: isMobile ? '1.25rem' : '1.5rem', minHeight: '300px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {plans.map(p => (
                   <div key={p.id} style={{ 
@@ -140,13 +139,35 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
                           <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="요금제명" style={{ flex: 1, padding: '0.625rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} />
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', flex: 1, alignItems: 'center' }}>
-                          <input type="number" value={formData.price} step="1000" onChange={e => setFormData({...formData, price: Number(e.target.value)})} placeholder="가격" style={{ width: '100px', padding: '0.625rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} />
+                          <input 
+                            type="number" 
+                            value={formData.price || ''} 
+                            step="1000" 
+                            onChange={e => setFormData({...formData, price: e.target.value === '' ? 0 : Number(e.target.value)})} 
+                            placeholder="가격" 
+                            style={{ width: '100px', padding: '0.625rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} 
+                            onFocus={(e) => e.target.value === '0' && (e.target.value = '')}
+                          />
                           <span style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>원</span>
-                          <input type="number" value={formData.months} onChange={e => setFormData({...formData, months: Number(e.target.value)})} placeholder="개월" style={{ width: '60px', padding: '0.625rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} />
+                          <input 
+                            type="number" 
+                            value={formData.months || ''} 
+                            onChange={e => setFormData({...formData, months: e.target.value === '' ? 0 : Number(e.target.value)})} 
+                            placeholder="개월" 
+                            style={{ width: '60px', padding: '0.625rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} 
+                            onFocus={(e) => e.target.value === '0' && (e.target.value = '')}
+                          />
                           <span style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>개월</span>
                           {formData.type === '횟수권' && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(255, 183, 134, 0.1)', padding: '0.25rem 0.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255, 183, 134, 0.3)' }}>
-                              <input type="number" value={formData.defaultQty} onChange={e => setFormData({...formData, defaultQty: Number(e.target.value)})} placeholder="횟수" style={{ width: '50px', padding: '0.4rem', borderRadius: '4px', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} />
+                              <input 
+                                type="number" 
+                                value={formData.defaultQty || ''} 
+                                onChange={e => setFormData({...formData, defaultQty: e.target.value === '' ? 0 : Number(e.target.value)})} 
+                                placeholder="횟수" 
+                                style={{ width: '50px', padding: '0.4rem', borderRadius: '4px', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} 
+                                onFocus={(e) => e.target.value === '0' && (e.target.value = '')}
+                              />
                               <span style={{ fontSize: '0.8125rem', color: 'var(--tertiary)', fontWeight: 600 }}>회</span>
                             </div>
                           )}
@@ -189,13 +210,38 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
                       <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="새 요금제명" style={{ flex: 1, padding: '0.625rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', flex: 1, alignItems: 'center' }}>
-                      <input required type="number" step="1000" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} placeholder="가격" style={{ width: '100px', padding: '0.625rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} />
+                      <input 
+                        required 
+                        type="number" 
+                        step="1000" 
+                        value={formData.price || ''} 
+                        onChange={e => setFormData({...formData, price: e.target.value === '' ? 0 : Number(e.target.value)})} 
+                        placeholder="가격" 
+                        style={{ width: '100px', padding: '0.625rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} 
+                        onFocus={(e) => e.target.value === '0' && (e.target.value = '')}
+                      />
                       <span style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>원</span>
-                      <input required type="number" value={formData.months} onChange={e => setFormData({...formData, months: Number(e.target.value)})} placeholder="개월" style={{ width: '60px', padding: '0.625rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} />
+                      <input 
+                        required 
+                        type="number" 
+                        value={formData.months || ''} 
+                        onChange={e => setFormData({...formData, months: e.target.value === '' ? 0 : Number(e.target.value)})} 
+                        placeholder="개월" 
+                        style={{ width: '60px', padding: '0.625rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} 
+                        onFocus={(e) => e.target.value === '0' && (e.target.value = '')}
+                      />
                       <span style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>개월</span>
                       {formData.type === '횟수권' && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(255, 183, 134, 0.1)', padding: '0.25rem 0.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255, 183, 134, 0.3)' }}>
-                          <input required type="number" value={formData.defaultQty} onChange={e => setFormData({...formData, defaultQty: Number(e.target.value)})} placeholder="횟수" style={{ width: '50px', padding: '0.4rem', borderRadius: '4px', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} />
+                          <input 
+                            required 
+                            type="number" 
+                            value={formData.defaultQty || ''} 
+                            onChange={e => setFormData({...formData, defaultQty: e.target.value === '' ? 0 : Number(e.target.value)})} 
+                            placeholder="횟수" 
+                            style={{ width: '50px', padding: '0.4rem', borderRadius: '4px', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-high)', color: 'var(--on-surface)', fontSize: '0.875rem' }} 
+                            onFocus={(e) => e.target.value === '0' && (e.target.value = '')}
+                          />
                           <span style={{ fontSize: '0.8125rem', color: 'var(--tertiary)', fontWeight: 600 }}>회</span>
                         </div>
                       )}

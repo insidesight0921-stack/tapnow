@@ -93,67 +93,102 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError('');
     
-    let expireDate = '';
-    let totalMonths = 0;
-    let plansArr: any[] = [];
-    
-    Object.entries(formData.planQs).forEach(([id, qty]) => {
-      const p = customPlans.find(cp => cp.id === id);
-      if (p && qty > 0) {
-        totalMonths += (p.months || 0) * qty;
-        for (let i = 0; i < qty; i++) {
-          plansArr.push({
-            name: p.name,
-            qty: p.type === '횟수권' ? (p.defaultQty || 1) : 1,
-            remainingQty: p.type === '횟수권' ? (p.defaultQty || 1) : undefined,
-            type: p.type
-          });
+    try {
+      let expireDate = '';
+      let totalMonths = 0;
+      let plansArr: any[] = [];
+      
+      const today = new Date();
+      
+      Object.entries(formData.planQs).forEach(([id, qty]) => {
+        const p = customPlans.find(cp => cp.id === id);
+        if (p && qty > 0) {
+          totalMonths += (p.months || 0) * qty;
+          for (let i = 0; i < qty; i++) {
+            const planItem: any = {
+              name: p.name,
+              qty: p.type === '횟수권' ? (p.defaultQty || 1) : 1,
+              type: p.type
+            };
+            if (p.type === '횟수권') {
+              planItem.remainingQty = (p.defaultQty || 1);
+            }
+            plansArr.push(planItem);
+          }
         }
-      }
-    });
-
-    const start = new Date(formData.startDate);
-    if (totalMonths > 0) {
-      start.setMonth(start.getMonth() + totalMonths);
-      expireDate = start.toISOString().split('T')[0];
-    } else if (memberToEdit) {
-      expireDate = memberToEdit.expireDate;
-      plansArr = memberToEdit.plans.map(p => {
-        if (p.type === '횟수권') {
-          return { ...p, remainingQty: formData.remainingQty };
-        }
-        return p;
       });
-    }
 
-    const payload = {
-      gymId: currentGymId,
-      name: formData.name,
-      phone: formData.phone,
-      belt: formData.belt,
-      gral: Number(formData.gral),
-      registerDate: formData.registerDate,
-      startDate: formData.startDate,
-      plans: plansArr,
-      paymentAmount: Number(formData.paymentAmount),
-      paymentMethod: formData.paymentMethod,
-      expireDate,
-      memo: formData.memo
-    };
+      if (totalMonths > 0) {
+        if (memberToEdit) {
+          const originalTotalMonths = memberToEdit.plans.reduce((acc, p) => {
+            const matched = customPlans.find(cp => cp.name === p.name);
+            return acc + (matched?.months || 0);
+          }, 0);
 
-    if (memberToEdit) {
-      await updateMember(memberToEdit.id, payload);
-      onClose();
-    } else {
-      const result = await addMember(payload);
-      if (result.success) {
+          const addedMonths = totalMonths - originalTotalMonths;
+
+          if (addedMonths > 0) {
+            const currentExpire = new Date(memberToEdit.expireDate);
+            const baseDate = currentExpire > today ? currentExpire : today;
+            baseDate.setMonth(baseDate.getMonth() + addedMonths);
+            expireDate = baseDate.toISOString().split('T')[0];
+          } else {
+            const start = new Date(formData.startDate);
+            start.setMonth(start.getMonth() + totalMonths);
+            expireDate = start.toISOString().split('T')[0];
+          }
+        } else {
+          const start = new Date(formData.startDate);
+          start.setMonth(start.getMonth() + totalMonths);
+          expireDate = start.toISOString().split('T')[0];
+        }
+      } else if (memberToEdit) {
+        expireDate = memberToEdit.expireDate;
+        plansArr = memberToEdit.plans.map(p => {
+          if (p.type === '횟수권') {
+            return { ...p, remainingQty: Number(formData.remainingQty) };
+          }
+          return p;
+        });
+      }
+
+      const payload = {
+        gymId: currentGymId,
+        name: formData.name,
+        phone: formData.phone,
+        belt: formData.belt,
+        gral: Number(formData.gral) || 0,
+        registerDate: formData.registerDate,
+        startDate: formData.startDate,
+        plans: plansArr,
+        paymentAmount: Number(formData.paymentAmount) || 0,
+        paymentMethod: formData.paymentMethod,
+        expireDate,
+        memo: formData.memo
+      };
+
+      console.log('--- Firestore 전송 페이로드 ---');
+      console.log(JSON.stringify(payload, null, 2));
+
+      if (memberToEdit) {
+        await updateMember(memberToEdit.id, payload);
         onClose();
       } else {
-        setError(result.message);
+        const result = await addMember(payload);
+        if (result.success) {
+          onClose();
+        } else {
+          setError(result.message);
+        }
       }
+    } catch (err: any) {
+      console.error('Submit Error:', err);
+      setError('처리 중 오류가 발생했습니다: ' + (err.message || '서버 응답 없음'));
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
@@ -166,6 +201,7 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
           padding: '1rem'
         }}>
           <motion.div
+            className="modal-content-base"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
@@ -173,16 +209,15 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
               background: 'var(--surface-container-high)',
               border: '1px solid var(--outline-variant)',
               borderRadius: 'var(--radius-xl)',
-              width: '100%', maxWidth: '500px',
-              maxHeight: '90vh', overflowY: 'auto'
+              width: '100%', maxWidth: '500px'
             }}
           >
-            <div style={{ padding: '1.75rem 1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface-container-high)', zIndex: 10 }}>
+            <div style={{ padding: '1.75rem 1.5rem', borderBottom: '1px solid var(--outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface-container-high)', zIndex: 10, flexShrink: 0, borderTopLeftRadius: 'var(--radius-xl)', borderTopRightRadius: 'var(--radius-xl)' }}>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>{memberToEdit ? '회원 정보 수정' : '신규 회원 등록'}</h2>
               <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', padding: '0.5rem' }}><X size={32} /></button>
             </div>
             
-            <form onSubmit={handleSubmit} style={{ padding: isMobile ? '1.25rem' : '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <form onSubmit={handleSubmit} className="modal-body-scroll" style={{ padding: isMobile ? '1.25rem' : '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {error && (
                 <div style={{ 
                   background: 'rgba(255, 180, 171, 0.1)', color: 'var(--error)', 
@@ -241,9 +276,10 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <input 
                       type="number" 
-                      value={formData.remainingQty} 
-                      onChange={e => setFormData({...formData, remainingQty: Number(e.target.value)})} 
+                      value={formData.remainingQty || ''} 
+                      onChange={e => setFormData({...formData, remainingQty: e.target.value === '' ? 0 : Number(e.target.value)})} 
                       style={{ width: '100px', background: 'var(--surface-container-low)', border: '1px solid var(--primary)', padding: '0.75rem', borderRadius: '0.5rem', color: 'var(--on-surface)', fontSize: '1rem', fontWeight: 800, textAlign: 'center' }}
+                      onFocus={(e) => e.target.value === '0' && (e.target.value = '')}
                     />
                     <span style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)', lineHeight: 1.4 }}>
                       현재 등록된 횟수권의 남은 횟수를 직접 수정할 수 있습니다.<br/>
@@ -254,7 +290,49 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
               )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>요금제 연장/새 결제 <span style={{fontSize: '0.7rem', color: 'var(--on-surface-variant)', fontWeight: 400}}>(선택 시 금액/기간 자동 합산)</span></label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>요금제 연장/새 결제 <span style={{fontSize: '0.7rem', color: 'var(--on-surface-variant)', fontWeight: 400}}>(금액/기간 자동 합산)</span></label>
+                  {(() => {
+                    let previewExpire = '';
+                    let tempMonths = 0;
+                    Object.entries(formData.planQs).forEach(([id, qty]) => {
+                      const p = customPlans.find(cp => cp.id === id);
+                      if (p) tempMonths += (p.months || 0) * qty;
+                    });
+                    
+                    if (tempMonths > 0) {
+                      if (memberToEdit) {
+                        const originalTotal = memberToEdit.plans.reduce((acc, p) => {
+                          const matched = customPlans.find(cp => cp.name === p.name);
+                          return acc + (matched?.months || 0);
+                        }, 0);
+                        const added = tempMonths - originalTotal;
+                        if (added > 0) {
+                          const curr = new Date(memberToEdit.expireDate);
+                          const base = curr > new Date() ? curr : new Date();
+                          base.setMonth(base.getMonth() + added);
+                          previewExpire = base.toISOString().split('T')[0];
+                        } else {
+                          const start = new Date(formData.startDate);
+                          start.setMonth(start.getMonth() + tempMonths);
+                          previewExpire = start.toISOString().split('T')[0];
+                        }
+                      } else {
+                        const start = new Date(formData.startDate);
+                        start.setMonth(start.getMonth() + tempMonths);
+                        previewExpire = start.toISOString().split('T')[0];
+                      }
+                    } else if (memberToEdit) {
+                      previewExpire = memberToEdit.expireDate;
+                    }
+                    
+                    return previewExpire ? (
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', background: 'var(--primary-container)', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
+                        예상 만료일: {previewExpire}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--surface-container-low)', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--outline-variant)', maxHeight: '200px', overflowY: 'auto' }}>
                   {customPlans.length === 0 && <span style={{fontSize: '0.75rem', color: 'var(--on-surface-variant)'}}>등록된 요금제가 없습니다.</span>}
                   {customPlans.map(p => {
@@ -287,7 +365,15 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>결제 금액 (원)</label>
-                  <input type="number" step="1000" value={formData.paymentAmount} onChange={e => setFormData({...formData, paymentAmount: Number(e.target.value)})} style={{ background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)', padding: '0.75rem', borderRadius: '0.5rem', color: 'var(--on-surface)', fontSize: '0.875rem' }}/>
+                  <input 
+                    type="number" 
+                    step="1000" 
+                    value={formData.paymentAmount || ''} 
+                    onChange={e => setFormData({...formData, paymentAmount: e.target.value === '' ? 0 : Number(e.target.value)})} 
+                    style={{ background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)', padding: '0.75rem', borderRadius: '0.5rem', color: 'var(--on-surface)', fontSize: '0.875rem' }}
+                    placeholder="0"
+                    onFocus={(e) => e.target.value === '0' && (e.target.value = '')}
+                  />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>결제 수단</label>
