@@ -181,9 +181,9 @@ export default function PlanManageModal({ isOpen, onClose }: PlanManageModalProp
                       </div>
                     ) : (
                       <>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                          <span style={{ fontWeight: 600, fontSize: '1rem' }}>{p.name}</span>
-                          <span style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1, minWidth: 0 }}>
+                          <span style={{ fontWeight: 600, fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={p.name}>{p.name}</span>
+                          <span style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {p.price.toLocaleString()}원 • {p.months}개월 유지 • {p.type} {p.type === '횟수권' ? `(${p.defaultQty}회)` : ''}
                           </span>
                         </div>
