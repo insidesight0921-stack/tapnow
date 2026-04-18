@@ -43,7 +43,8 @@ function App() {
   // 임시 테스트용: Ctrl + Shift + 9 클릭 시 90명 회원 자동 등록
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === '9') {
+      // Shift 키와 숫자 9를 함께 누르면 e.key가 '9'가 아닌 '(' 등으로 찍히므로 e.code를 사용
+      if (e.ctrlKey && e.shiftKey && e.code === 'Digit9') {
         const { addMember } = useStore.getState();
         const storeState = useStore.getState();
         if (!storeState.isAuthenticated || !storeState.gymId) {

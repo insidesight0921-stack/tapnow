@@ -108,26 +108,26 @@ export default function MemberCard({ member, isSelected, onToggleSelection }: Me
 
       {/* Body */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', minWidth: 0 }}>
           <span style={{ fontSize: '0.6875rem' }}>전화번호</span>
-          <span style={{ color: 'var(--on-surface)' }}>{member.phone || '—'}</span>
+          <span style={{ color: 'var(--on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>{member.phone || '—'}</span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', minWidth: 0 }}>
           <span style={{ fontSize: '0.6875rem' }}>요금제</span>
-          <span style={{ color: 'var(--on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <span style={{ color: 'var(--on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }} title={member.plans.length > 0 ? member.plans.map(p => p.qty > 1 ? `${p.name}×${p.qty}` : p.name).join(', ') : '—'}>
             {member.plans.length > 0 ? member.plans.map(p => p.qty > 1 ? `${p.name}×${p.qty}` : p.name).join(', ') : '—'}
           </span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', minWidth: 0 }}>
           <span style={{ fontSize: '0.6875rem' }}>만료일</span>
-          <span style={{ color: isExpired ? 'var(--error)' : 'var(--tertiary)', fontWeight: 600 }}>
+          <span style={{ color: isExpired ? 'var(--error)' : 'var(--tertiary)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
             {member.expireDate || '—'}
           </span>
         </div>
         {hasTicket && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', minWidth: 0 }}>
             <span style={{ fontSize: '0.6875rem' }}>잔여 횟수</span>
-            <span style={{ color: lowRemaining ? '#ffb700' : 'var(--on-surface)', fontWeight: 600 }}>
+            <span style={{ color: lowRemaining ? '#ffb700' : 'var(--on-surface)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
               {lowRemaining ? '⚠️ ' : ''}{totalRemaining}회
             </span>
           </div>
