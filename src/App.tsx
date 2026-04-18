@@ -40,40 +40,6 @@ function App() {
     return () => unsub();
   }, [init]);
 
-  // 임시 테스트용: Ctrl + Shift + 9 클릭 시 90명 회원 자동 등록
-  useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      // Shift 키와 숫자 9를 함께 누르면 e.key가 '9'가 아닌 '(' 등으로 찍히므로 e.code를 사용
-      if (e.ctrlKey && e.shiftKey && e.code === 'Digit9') {
-        const { addMember } = useStore.getState();
-        const storeState = useStore.getState();
-        if (!storeState.isAuthenticated || !storeState.gymId) {
-          alert('로그인 후에만 테스트 회원을 등록할 수 있습니다.');
-          return;
-        }
-        if (confirm('테스트 회원 90명을 임의로 추가하시겠습니까? (삭제 시 일괄 삭제 가능)')) {
-          for (let i = 0; i < 90; i++) {
-            await addMember({
-              name: `테스트 회원 ${i + 1}`,
-              phone: `010-${String(Math.floor(Math.random() * 9000) + 1000)}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-              belt: '화이트',
-              gral: 0,
-              registerDate: new Date().toISOString().split('T')[0],
-              startDate: new Date().toISOString().split('T')[0],
-              plans: [{ name: '1개월', type: '기간권', qty: 1 }],
-              paymentAmount: 0,
-              paymentMethod: '카드',
-              memo: '임시 테스트 회원 (Ctrl+Shift+9)'
-            });
-          }
-          alert('90명의 테스트 회원이 등록되었습니다!');
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   useEffect(() => {
     if (theme === 'light') {
       document.body.classList.add('light-theme');
