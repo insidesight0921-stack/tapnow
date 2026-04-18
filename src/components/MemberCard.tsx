@@ -63,20 +63,23 @@ export default function MemberCard({ member, isSelected, onToggleSelection }: Me
       e.currentTarget.style.boxShadow = 'none';
     }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative' }}>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flex: 1, minWidth: 0 }}>
           {onToggleSelection && (
             <input 
               type="checkbox" 
               checked={isSelected} 
               onChange={() => onToggleSelection(member.id)}
-              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--tertiary)', marginTop: '0.25rem' }}
+              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--tertiary)', marginTop: '0.25rem', flexShrink: 0 }}
             />
           )}
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--on-surface)' }}>{member.name}</h3>
-              {isLongAbsent && <span style={{ fontSize: '0.6875rem', background: 'rgba(100,100,100,0.2)', color: 'var(--on-surface-variant)', padding: '0.125rem 0.4rem', borderRadius: '8px' }}>💤 장기미출석</span>}
+              <h3 style={{ 
+                fontSize: '1.125rem', fontWeight: 600, color: 'var(--on-surface)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%'
+              }} title={member.name}>{member.name}</h3>
+              {isLongAbsent && <span style={{ flexShrink: 0, fontSize: '0.6875rem', background: 'rgba(100,100,100,0.2)', color: 'var(--on-surface-variant)', padding: '0.125rem 0.4rem', borderRadius: '8px', whiteSpace: 'nowrap' }}>💤 장기미출석</span>}
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
               <span style={{
@@ -88,17 +91,17 @@ export default function MemberCard({ member, isSelected, onToggleSelection }: Me
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem', flexShrink: 0 }}>
           <span style={{
             background: status === '유효' ? 'rgba(82, 183, 136, 0.15)' : 'rgba(255, 180, 171, 0.15)',
             color: status === '유효' ? '#52b788' : 'var(--error)',
-            padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 600
+            padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap'
           }}>{status}</span>
           {isUrgent && dday !== null && (
-            <span style={{ fontSize: '0.6875rem', color: 'var(--error)', fontWeight: 700 }}>🔴 D-{dday}</span>
+            <span style={{ fontSize: '0.6875rem', color: 'var(--error)', fontWeight: 700, whiteSpace: 'nowrap' }}>🔴 D-{dday}</span>
           )}
           {isWarning && dday !== null && (
-            <span style={{ fontSize: '0.6875rem', color: '#ffb700', fontWeight: 700 }}>⚠️ D-{dday}</span>
+            <span style={{ fontSize: '0.6875rem', color: '#ffb700', fontWeight: 700, whiteSpace: 'nowrap' }}>⚠️ D-{dday}</span>
           )}
         </div>
       </div>
