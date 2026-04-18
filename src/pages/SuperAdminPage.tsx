@@ -5,6 +5,8 @@ import {
   LogOut, Plus, Pencil, Trash2, X, ShieldAlert,
   Building2, Users, TrendingUp, AlertCircle
 } from 'lucide-react';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { useStore, type GymAccount } from '../store/useStore';
 
 // 요금제 정보 상수
@@ -179,6 +181,23 @@ export default function SuperAdminPage() {
   const logout = useStore(s => s.logout);
   const adminEmail = useStore(s => s.adminEmail);
   const navigate = useNavigate();
+
+  // 각 도장별 실제 수련생 수를 Firestore에서 실시간 구독
+  const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (gymAccounts.length === 0) return;
+
+    const unsubscribers: (() => void)[] = [];
+    for (const gym of gymAccounts) {
+      const q = query(collection(db, 'members'), where('gymId', '==', gym.id));
+      const unsub = onSnapshot(q, (snap) => {
+        setMemberCounts(prev => ({ ...prev, [gym.id]: snap.size }));
+      });
+      unsubscribers.push(unsub);
+    }
+    return () => unsubscribers.forEach(u => u());
+  }, [gymAccounts]);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<GymAccount | null>(null);
@@ -379,7 +398,7 @@ export default function SuperAdminPage() {
                 {/* 정보 그리드 */}
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '0.75rem' }}>
                   {[
-                    { label: '수련생', value: `${gym.memberCount}명` },
+                    { label: '수련생', value: `${memberCounts[gym.id] ?? 0}명` },
                     { label: '등록일', value: gym.registeredAt },
                     { label: '만료일', value: gym.planExpireDate || '—', accent: isExpired ? 'var(--error)' : isExpiring ? '#ffb700' : undefined },
                   ].map(({ label, value, accent }) => (
@@ -423,13 +442,18 @@ export default function SuperAdminPage() {
                     style={{ flex: 1, height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.375rem', background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.75rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 700 }}
                   ><Pencil size={18} /> 수정</button>
                   {deleteConfirmId === gym.id ? (
-                    <div style={{ flex: 1, display: 'flex', gap: '0.5rem' }}>
-                      <button onClick={() => setDeleteConfirmId(null)}
-                        style={{ flex: 1, height: '44px', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.75rem', cursor: 'pointer', fontSize: '0.875rem' }}
-                      >취소</button>
-                      <button onClick={() => { deleteGymAccount(gym.id); setDeleteConfirmId(null); }}
-                        style={{ flex: 1, height: '44px', background: 'var(--error)', border: 'none', color: '#fff', borderRadius: '0.75rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 700 }}
-                      >삭제</button>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--error)', textAlign: 'center', fontWeight: 600 }}>
+                        ⚠️ 해당 도장의 모든 회원 데이터가 함께 삭제됩니다.
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button onClick={() => setDeleteConfirmId(null)}
+                          style={{ flex: 1, height: '44px', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', borderRadius: '0.75rem', cursor: 'pointer', fontSize: '0.875rem' }}
+                        >취소</button>
+                        <button onClick={() => { deleteGymAccount(gym.id); setDeleteConfirmId(null); }}
+                          style={{ flex: 1, height: '44px', background: 'var(--error)', border: 'none', color: '#fff', borderRadius: '0.75rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 700 }}
+                        >삭제</button>
+                      </div>
                     </div>
                   ) : (
                     <button onClick={() => setDeleteConfirmId(gym.id)}

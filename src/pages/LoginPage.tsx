@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import { Lock } from 'lucide-react';
 import { 
   signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword 
+  createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -83,14 +84,29 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       console.error('Auth Error:', err);
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-        setError('등록되지 않은 계정입니다. 회원가입 후 이용해주세요.');
+      if (err.code === 'auth/user-not-found') {
+        setError('가입되어 있지 않은 계정입니다.');
       } else if (err.code === 'auth/wrong-password') {
-        setError('비밀번호가 올바르지 않습니다.');
+        setError('비밀번호가 올바르지 않습니다. 다시 입력해주세요.');
+      } else if (err.code === 'auth/invalid-credential') {
+        // Firebase v9+에서는 wrong-password와 user-not-found가 이 코드로 통합됨
+        // 이메일 존재 여부를 추가 확인하여 메시지 구분
+        try {
+          const methods = await fetchSignInMethodsForEmail(auth, email.trim().toLowerCase());
+          if (methods.length > 0) {
+            setError('비밀번호가 올바르지 않습니다. 다시 입력해주세요.');
+          } else {
+            setError('가입되어 있지 않은 계정입니다.');
+          }
+        } catch {
+          setError('아이디 또는 비밀번호를 확인해주세요.');
+        }
       } else if (err.code === 'auth/email-already-in-use') {
         setError('이미 사용 중인 이메일입니다.');
       } else if (err.code === 'auth/weak-password') {
         setError('비밀번호는 6자리 이상이어야 합니다.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.');
       } else {
         setError('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
       }
