@@ -157,8 +157,27 @@ export default function MembersPage() {
           gap: '0.5rem', 
           alignItems: 'center', 
           flex: 1,
-          maxWidth: isMobile ? 'none' : '480px'
+          maxWidth: isMobile ? 'none' : '640px'
         }}>
+          {/* 전체 선택 제어 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '0.5rem', background: 'var(--surface-container-high)', padding: '0 1rem', height: '44px', borderRadius: '0.75rem', border: '1px solid var(--outline-variant)' }}>
+            <input 
+              type="checkbox" 
+              id="select-all-members"
+              checked={filteredMembers.length > 0 && filteredMembers.every(m => selectedMemberIds.includes(m.id))}
+              onChange={(e) => {
+                const allFilteredIds = filteredMembers.map(m => m.id);
+                if (e.target.checked) {
+                  setSelectedMemberIds(prev => Array.from(new Set([...prev, ...allFilteredIds])));
+                } else {
+                  setSelectedMemberIds(prev => prev.filter(id => !allFilteredIds.includes(id)));
+                }
+              }}
+              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--tertiary)' }}
+            />
+            <label htmlFor="select-all-members" style={{ fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', color: 'var(--on-surface-variant)', whiteSpace: 'nowrap' }}>전체</label>
+          </div>
+
           <button className="btn btn-primary" onClick={() => useStore.getState().openMemberModal()} style={{
             padding: '0 1.25rem', height: '44px', borderRadius: '0.75rem', background: 'var(--tertiary)', color: '#502400', fontWeight: 700, fontSize: '0.875rem', whiteSpace: 'nowrap'
           }}>회원 등록</button>
