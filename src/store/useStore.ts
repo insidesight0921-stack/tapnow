@@ -557,14 +557,27 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   bulkMarkAttendance: async (memberIds) => {
-    for (const id of memberIds) {
-      await get().markAttendance(id);
+    console.log(`[Bulk] Starting attendance for ${memberIds.length} members...`);
+    const startTime = Date.now();
+    try {
+      // 병행 처리를 위해 Promise.all 사용 (단, Firestore 부하를 고려해 한 번에 너무 많으면 나눠야 할 수도 있음)
+      await Promise.all(memberIds.map(id => get().markAttendance(id)));
+      console.log(`[Bulk] Attendance completed in ${Date.now() - startTime}ms`);
+    } catch (err) {
+      console.error('[Bulk] Attendance failed:', err);
+      throw err;
     }
   },
 
   bulkDeleteMembers: async (memberIds) => {
-    for (const id of memberIds) {
-      await get().deleteMember(id);
+    console.log(`[Bulk] Starting deletion for ${memberIds.length} members...`);
+    const startTime = Date.now();
+    try {
+      await Promise.all(memberIds.map(id => get().deleteMember(id)));
+      console.log(`[Bulk] Deletion completed in ${Date.now() - startTime}ms`);
+    } catch (err) {
+      console.error('[Bulk] Deletion failed:', err);
+      throw err;
     }
   },
 

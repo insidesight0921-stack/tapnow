@@ -224,27 +224,40 @@ export default function MembersPage() {
             <div style={{ height: '20px', width: '1px', background: 'var(--outline-variant)' }} />
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button 
-                onClick={async () => {
-                  if (confirm(`${selectedMemberIds.length}명을 일괄 출석 처리하시겠습니까?`)) {
-                    await bulkMarkAttendance(selectedMemberIds);
-                    setSelectedMemberIds([]);
-                    alert('출석 처리가 완료되었습니다.');
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (window.confirm(`${selectedMemberIds.length}명을 일괄 출석 처리하시겠습니까?`)) {
+                    try {
+                      await bulkMarkAttendance(selectedMemberIds);
+                      setSelectedMemberIds([]);
+                      window.alert('출석 처리가 완료되었습니다.');
+                    } catch (err) {
+                      window.alert('출석 처리 중 오류가 발생했습니다.');
+                    }
                   }
                 }}
                 style={{ background: 'var(--primary)', color: '#000', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
               >일괄 출석</button>
               <button 
-                onClick={async () => {
-                  if (confirm(`${selectedMemberIds.length}명을 정말 삭제하시겠습니까? 관련 데이터가 모두 소멸됩니다.`)) {
-                    await bulkDeleteMembers(selectedMemberIds);
-                    setSelectedMemberIds([]);
-                    alert('삭제가 완료되었습니다.');
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (window.confirm(`${selectedMemberIds.length}명을 정말 삭제하시겠습니까? 관련 데이터가 모두 소멸됩니다.`)) {
+                    try {
+                      await bulkDeleteMembers(selectedMemberIds);
+                      setSelectedMemberIds([]);
+                      window.alert('삭제가 완료되었습니다.');
+                    } catch (err) {
+                      window.alert('삭제 중 오류가 발생했습니다.');
+                    }
                   }
                 }}
                 style={{ background: 'rgba(255,71,87,0.1)', color: 'var(--error)', border: '1px solid var(--error)', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
               >일괄 삭제</button>
               <button 
-                onClick={() => setSelectedMemberIds([])}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedMemberIds([]);
+                }}
                 style={{ background: 'transparent', color: 'var(--on-surface-variant)', border: 'none', padding: '0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}
               >취소</button>
             </div>
