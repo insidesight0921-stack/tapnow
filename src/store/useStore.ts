@@ -350,6 +350,26 @@ export const useStore = create<AppState>((set, get) => ({
 
   updateGymAccount: async (id, fields) => {
     await updateDoc(doc(db, 'gyms', id), fields);
+
+    // 마스터 관리자가 요금제를 free가 아닌 요금제로 승급할 때 자동 채움 로직 적용
+    if (fields.plan && fields.plan !== 'free') {
+      try {
+        const q = query(collection(db, 'pendingMembers'), where('gymId', '==', id));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const promises = snap.docs.map(async (docSnap) => {
+            const data = docSnap.data();
+            delete data.createdAt;
+            await addDoc(collection(db, 'members'), cleanData({ ...data, gymId: id }));
+            await deleteDoc(docSnap.ref);
+          });
+          await Promise.all(promises);
+          console.log(`[마스터 계정 업그레이드] 대기 중이던 회원 ${snap.docs.length}명 정식 등록 완료`);
+        }
+      } catch (err) {
+        console.error('Pending members restore from admin error:', err);
+      }
+    }
   },
 
   deleteGymAccount: async (gymId) => {
