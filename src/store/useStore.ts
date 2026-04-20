@@ -354,15 +354,17 @@ export const useStore = create<AppState>((set, get) => ({
 
   deleteGymAccount: async (gymId) => {
     try {
-      // 1. Vercel API를 통해 Firebase Auth 사용자 삭제 (무료 방식)
+      // 1. Vercel API를 통해 Firebase Auth 사용자 삭제
       try {
-        await fetch('/api/delete-user', {
+        const authRes = await fetch('/api/delete-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ uid: gymId }),
         });
+        const authResult = await authRes.json();
+        console.log(`Auth user deletion result (${gymId}):`, authResult);
       } catch (authError) {
-        console.error('Failed to delete Auth user via API:', authError);
+        console.warn('Auth user deletion API call failed (env var may not be set):', authError);
       }
 
       // 2. 도장 자체 정보 삭제

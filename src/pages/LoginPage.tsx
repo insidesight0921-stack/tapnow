@@ -5,7 +5,8 @@ import { Lock } from 'lucide-react';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
-  fetchSignInMethodsForEmail
+  fetchSignInMethodsForEmail,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -19,6 +20,9 @@ export default function LoginPage() {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetMsg, setResetMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
   const navigate = useNavigate();
   const { isAuthenticated, userRole, loginWithGoogle } = useStore();
@@ -252,6 +256,70 @@ export default function LoginPage() {
           >
             {isSubmitting ? '처리 중...' : (isLogin ? '로그인' : '회원가입')}
           </button>
+
+          {/* 비밀번호 찾기 */}
+          {isLogin && (
+            <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+              <button
+                type="button"
+                onClick={() => { setShowResetPassword(!showResetPassword); setResetMsg(null); setResetEmail(email); }}
+                style={{ background: 'none', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', fontSize: '0.8125rem', textDecoration: 'underline' }}
+              >
+                비밀번호를 잊으셨나요?
+              </button>
+              {showResetPassword && (
+                <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <input
+                    type="email"
+                    placeholder="가입한 이메일 주소"
+                    value={resetEmail}
+                    onChange={e => setResetEmail(e.target.value)}
+                    className="input-field"
+                    style={{
+                      background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)',
+                      height: '44px', padding: '0 1rem', borderRadius: 'var(--radius-md)', color: 'var(--on-surface)', outline: 'none', fontSize: '0.875rem'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!resetEmail.includes('@')) {
+                        setResetMsg({ type: 'error', text: '유효한 이메일을 입력해주세요.' });
+                        return;
+                      }
+                      try {
+                        await sendPasswordResetEmail(auth, resetEmail.trim().toLowerCase());
+                        setResetMsg({ type: 'success', text: '비밀번호 재설정 이메일이 발송되었습니다. 메일함을 확인해주세요.' });
+                      } catch (err: any) {
+                        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-email') {
+                          setResetMsg({ type: 'error', text: '해당 이메일로 가입된 계정이 없습니다.' });
+                        } else {
+                          // Firebase 보안 정책상 이메일 존재 여부를 숨길 수 있으므로 성공 메시지 표시
+                          setResetMsg({ type: 'success', text: '계정이 존재하면 비밀번호 재설정 이메일이 발송됩니다. 메일함을 확인해주세요.' });
+                        }
+                      }
+                    }}
+                    style={{
+                      padding: '0.625rem', background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)',
+                      borderRadius: 'var(--radius-md)', color: 'var(--on-surface)', cursor: 'pointer', fontWeight: 600, fontSize: '0.8125rem'
+                    }}
+                  >
+                    재설정 이메일 보내기
+                  </button>
+                  {resetMsg && (
+                    <div style={{
+                      padding: '0.5rem 0.75rem', borderRadius: '0.5rem', fontSize: '0.75rem', textAlign: 'center',
+                      background: resetMsg.type === 'success' ? 'rgba(82,183,136,0.15)' : 'rgba(211,47,47,0.15)',
+                      color: resetMsg.type === 'success' ? '#52b788' : '#ffb4ab',
+                      border: `1px solid ${resetMsg.type === 'success' ? 'rgba(82,183,136,0.3)' : 'rgba(211,47,47,0.3)'}`
+                    }}>
+                      {resetMsg.text}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </form>
 
         {/* SNS 로그인 구분선 */}

@@ -33,10 +33,11 @@ export default function CsvImportModal() {
   const [error, setError] = useState<string>('');
   const [importResults, setImportResults] = useState<{ success: number; failed: number }>({ success: 0, failed: 0 });
   const [debugLog, setDebugLog] = useState<string>('');
+  const [deduplicatedCount, setDeduplicatedCount] = useState(0);
   
-  const { gymId, plans, addMember } = useStore();
+  const { gymId, plans, addMember, addPlan } = useStore();
 
-  // 모달이 닫힐 때 상태 초기화 (사용자 요구사항)
+  // 모달이 닫힐 때 상태 초기화
   useEffect(() => {
     if (!isOpen) {
       setStep('upload');
@@ -46,6 +47,7 @@ export default function CsvImportModal() {
       setError('');
       setImportResults({ success: 0, failed: 0 });
       setDebugLog('');
+      setDeduplicatedCount(0);
     }
   }, [isOpen]);
 
@@ -198,6 +200,41 @@ export default function CsvImportModal() {
       setError('이름과 전화번호 매핑은 필수입니다.');
       return;
     }
+
+    // 중복 제거: 이름 + 전화번호 기준 그룹핑 → 만료일이 가장 최신인 행만 유지
+    const nameField = fieldMapping.name;
+    const phoneField = fieldMapping.phone;
+    const expireField = fieldMapping.expireDate;
+
+    const grouped = new Map<string, any>();
+    for (const row of csvData) {
+      const name = (row[nameField] || '').toString().trim();
+      const phone = (row[phoneField] || '').toString().replace(/[^0-9]/g, '');
+      if (!name || !phone) continue;
+
+      const key = `${name}__${phone}`;
+      const existing = grouped.get(key);
+
+      if (!existing) {
+        grouped.set(key, row);
+      } else if (expireField) {
+        const existingDate = (existing[expireField] || '').toString();
+        const newDate = (row[expireField] || '').toString();
+        if (newDate > existingDate) {
+          grouped.set(key, row);
+        }
+      }
+    }
+
+    const deduped = Array.from(grouped.values());
+    const removedCount = csvData.length - deduped.length;
+    setDeduplicatedCount(removedCount);
+    setCsvData(deduped);
+
+    if (removedCount > 0) {
+      setDebugLog(prev => `${prev}\n🔄 중복 제거: 동일인(이름+전화번호) ${removedCount}건 제거됨 (최신 만료일 기준 유지)`);
+    }
+
     setStep('preview');
     setError('');
   };
@@ -206,21 +243,52 @@ export default function CsvImportModal() {
     let success = 0;
     let failed = 0;
 
+    // 자동 생성된 요금제 캐시 (동일 요금제 중복 생성 방지)
+    const planCache = new Map<string, { id: string; name: string; type: '횟수권' | '기간권' }>();
+    // 기존 요금제를 캐시에 미리 로드
+    for (const p of plans) {
+      planCache.set(p.name, { id: p.id, name: p.name, type: p.type });
+    }
+
+    const formatExcelDate = (val: any) => {
+      if (!val) return '';
+      if (typeof val === 'number') {
+        try {
+          const date = XLSX.SSF.parse_date_code(val);
+          return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
+        } catch { return val.toString(); }
+      }
+      return val.toString();
+    };
+
     for (const row of csvData) {
       try {
         const planName = fieldMapping.planName ? row[fieldMapping.planName]?.toString().trim() : '';
-        const foundPlan = plans.find(p => p.name === planName);
+        let foundPlan = planName ? planCache.get(planName) : undefined;
 
-        const formatExcelDate = (val: any) => {
-          if (!val) return '';
-          if (typeof val === 'number') {
-            try {
-              const date = XLSX.SSF.parse_date_code(val);
-              return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
-            } catch { return val.toString(); }
+        // 미등록 요금제인 경우 자동 생성
+        if (planName && !foundPlan) {
+          try {
+            const hasRemaining = !!(fieldMapping.remainingQty && row[fieldMapping.remainingQty]);
+            const newPlanType: '횟수권' | '기간권' = hasRemaining ? '횟수권' : '기간권';
+            await addPlan({
+              name: planName,
+              price: 0,
+              months: 1,
+              type: newPlanType,
+              ...(newPlanType === '횟수권' ? { defaultQty: parseInt(row[fieldMapping.remainingQty]) || 10 } : {})
+            });
+            // 생성 후 store에서 최신 plans 가져오기
+            const latestPlans = useStore.getState().plans;
+            const newPlan = latestPlans.find(p => p.name === planName);
+            if (newPlan) {
+              foundPlan = { id: newPlan.id, name: newPlan.name, type: newPlan.type };
+              planCache.set(planName, foundPlan);
+            }
+          } catch (planErr) {
+            console.warn(`요금제 '${planName}' 자동 생성 실패:`, planErr);
           }
-          return val.toString();
-        };
+        }
 
         const newMember: Omit<Member, 'id'> = {
           name: row[fieldMapping.name]?.toString().trim() || '',
@@ -234,7 +302,7 @@ export default function CsvImportModal() {
             id: foundPlan.id,
             name: foundPlan.name,
             qty: 1,
-            remainingQty: fieldMapping.remainingQty ? parseInt(row[fieldMapping.remainingQty]) || 0 : (foundPlan.type === '횟수권' ? foundPlan.defaultQty || 0 : undefined),
+            remainingQty: fieldMapping.remainingQty ? parseInt(row[fieldMapping.remainingQty]) || 0 : (foundPlan.type === '횟수권' ? 0 : undefined),
             type: foundPlan.type
           }] : [],
           paymentAmount: parseInt(row[fieldMapping.paymentAmount]) || 0,
@@ -339,7 +407,15 @@ export default function CsvImportModal() {
                     <FileText size={40} color="var(--primary)" />
                   </div>
                   <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem', fontWeight: 700 }}>데이터 가져오기 준비 완료</h3>
-                  <p style={{ color: 'var(--on-surface-variant)', marginBottom: '2.5rem', lineHeight: 1.6 }}>총 <strong style={{ color: 'var(--primary)', fontSize: '1.25rem' }}>{csvData.length}명</strong>의 회원 데이터를 시스템에 등록합니다.<br />기존 데이터는 유지되며 새로운 회원이 추가됩니다.</p>
+                  <p style={{ color: 'var(--on-surface-variant)', marginBottom: '1rem', lineHeight: 1.6 }}>총 <strong style={{ color: 'var(--primary)', fontSize: '1.25rem' }}>{csvData.length}명</strong>의 회원 데이터를 시스템에 등록합니다.<br />기존 데이터는 유지되며 새로운 회원이 추가됩니다.</p>
+                  {deduplicatedCount > 0 && (
+                    <div style={{ padding: '0.75rem 1rem', background: 'rgba(255,183,0,0.12)', border: '1px solid rgba(255,183,0,0.35)', borderRadius: '0.75rem', marginBottom: '1rem', fontSize: '0.875rem', color: '#ffb700', textAlign: 'left' }}>
+                      🔄 동일인 중복 <strong>{deduplicatedCount}건</strong> 제거됨 (이름+전화번호 기준, 최신 만료일 유지)
+                    </div>
+                  )}
+                  <div style={{ padding: '0.5rem 1rem', background: 'rgba(var(--primary-rgb), 0.08)', border: '1px solid rgba(var(--primary-rgb), 0.2)', borderRadius: '0.75rem', marginBottom: '2rem', fontSize: '0.8125rem', color: 'var(--primary)', textAlign: 'left' }}>
+                    💡 파일에 있는 요금제 정보가 기존 목록에 없으면 자동으로 시스템에 등록됩니다.
+                  </div>
                   
                   <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center' }}>
                     <button onClick={() => setStep('mapping')} style={{ padding: '1rem 2.5rem', backgroundColor: 'transparent', border: '1px solid var(--outline-variant)', borderRadius: '100px', fontWeight: 600, color: 'var(--on-surface)' }}>이전 단계</button>
