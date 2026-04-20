@@ -3,6 +3,8 @@ import { X, Upload, FileText, CheckCircle, AlertCircle, HelpCircle } from 'lucid
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { useStore, type Member } from '../store/useStore';
 
 type ImportStep = 'upload' | 'mapping' | 'preview' | 'success';
@@ -31,7 +33,7 @@ export default function CsvImportModal() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>('');
-  const [importResults, setImportResults] = useState<{ success: number; failed: number }>({ success: 0, failed: 0 });
+  const [importResults, setImportResults] = useState<{ success: number; failed: number; pending: number }>({ success: 0, failed: 0, pending: 0 });
   const [debugLog, setDebugLog] = useState<string>('');
   const [deduplicatedCount, setDeduplicatedCount] = useState(0);
   
@@ -45,7 +47,7 @@ export default function CsvImportModal() {
       setHeaders([]);
       setFieldMapping({});
       setError('');
-      setImportResults({ success: 0, failed: 0 });
+      setImportResults({ success: 0, failed: 0, pending: 0 });
       setDebugLog('');
       setDeduplicatedCount(0);
     }
@@ -96,7 +98,7 @@ export default function CsvImportModal() {
           const workbook = XLSX.read(data, { type: 'array' });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
-          const allRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+          const allRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' }) as any[][];
           findHeadersAndProcess(allRows);
         } catch (err: any) {
           setError(`엑셀 파싱 오류: ${err.message}`);
@@ -242,6 +244,7 @@ export default function CsvImportModal() {
   const handleImport = async () => {
     let success = 0;
     let failed = 0;
+    let pending = 0;
 
     // 자동 생성된 요금제 캐시 (동일 요금제 중복 생성 방지)
     const planCache = new Map<string, { id: string; name: string; type: '횟수권' | '기간권' }>();
@@ -312,8 +315,19 @@ export default function CsvImportModal() {
         };
 
         if (newMember.name && newMember.phone) {
-          await addMember(newMember);
-          success++;
+          const res = await addMember(newMember);
+          if (!res.success && res.message?.includes('한도')) {
+            await addDoc(collection(db, 'pendingMembers'), { 
+              ...newMember, 
+              gymId: gymId || '', 
+              createdAt: serverTimestamp() 
+            });
+            pending++;
+          } else if (res.success) {
+            success++;
+          } else {
+            failed++;
+          }
         } else {
           failed++;
         }
@@ -323,7 +337,7 @@ export default function CsvImportModal() {
       }
     }
 
-    setImportResults({ success, failed });
+    setImportResults({ success, failed, pending });
     setStep('success');
   };
 
@@ -429,15 +443,35 @@ export default function CsvImportModal() {
                   <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: 'rgba(76, 175, 80, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
                     <CheckCircle size={60} color="#4CAF50" />
                   </div>
-                  <h3 style={{ fontSize: '1.75rem', marginBottom: '1rem', fontWeight: 800 }}>복구 성공!</h3>
-                  <p style={{ color: 'var(--on-surface-variant)', marginBottom: '1rem' }}>회원 데이터를 안전하게 불러왔습니다.</p>
-                  <div style={{ backgroundColor: 'var(--surface-container)', padding: '1.5rem', borderRadius: '1rem', marginBottom: '2.5rem', display: 'inline-block', minWidth: '200px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>성공:</span><span style={{ color: '#4CAF50', fontWeight: 800 }}>{importResults.success}건</span></div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>실패:</span><span style={{ color: '#FF5252', fontWeight: 800 }}>{importResults.failed}건</span></div>
+                  <h3 style={{ fontSize: '1.75rem', marginBottom: '1rem', fontWeight: 800 }}>복구 결과</h3>
+                  <p style={{ color: 'var(--on-surface-variant)', marginBottom: '2rem', lineHeight: 1.6 }}>데이터 복구 작업이 성공적으로 완료되었습니다.<br />시스템에 적용된 결과를 확인하세요.</p>
+                  
+                  <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginBottom: '2.5rem' }}>
+                    <div style={{ padding: '1rem 2rem', backgroundColor: 'rgba(82, 183, 136, 0.1)', borderRadius: '1rem', border: '1px solid rgba(82, 183, 136, 0.3)' }}>
+                      <div style={{ fontSize: '0.875rem', color: '#52B788', fontWeight: 600, marginBottom: '0.5rem' }}>성공</div>
+                      <div style={{ fontSize: '2rem', fontWeight: 800, color: '#52B788' }}>{importResults.success}</div>
+                    </div>
+                    {importResults.pending > 0 && (
+                      <div style={{ padding: '1rem 2rem', backgroundColor: 'rgba(255, 183, 0, 0.1)', borderRadius: '1rem', border: '1px solid rgba(255, 183, 0, 0.3)' }}>
+                        <div style={{ fontSize: '0.875rem', color: '#FFB700', fontWeight: 600, marginBottom: '0.5rem' }}>초과(대기)</div>
+                        <div style={{ fontSize: '2rem', fontWeight: 800, color: '#FFB700' }}>{importResults.pending}</div>
+                      </div>
+                    )}
+                    <div style={{ padding: '1rem 2rem', backgroundColor: 'rgba(255, 82, 82, 0.1)', borderRadius: '1rem', border: '1px solid rgba(255, 82, 82, 0.3)' }}>
+                      <div style={{ fontSize: '0.875rem', color: '#FF5252', fontWeight: 600, marginBottom: '0.5rem' }}>실패</div>
+                      <div style={{ fontSize: '2rem', fontWeight: 800, color: '#FF5252' }}>{importResults.failed}</div>
+                    </div>
                   </div>
-                  <div>
-                    <button onClick={onClose} style={{ padding: '1rem 4rem', backgroundColor: 'var(--primary)', color: '#FFFFFF', border: 'none', borderRadius: '100px', fontWeight: 700 }}>대시보드로 돌아가기</button>
-                  </div>
+
+                  {importResults.pending > 0 && (
+                    <div style={{ padding: '0.875rem 1rem', background: 'rgba(255,183,0,0.12)', border: '1px solid rgba(255,183,0,0.35)', borderRadius: '0.75rem', marginBottom: '1.5rem', fontSize: '0.875rem', color: '#ffb700', textAlign: 'left', lineHeight: 1.5 }}>
+                      💡 무료 요금제 30명 제한으로 <strong>{importResults.pending}명</strong>의 데이터가 대기(백업) 중입니다.<br />요금제를 승급하시면 대기 중인 회원이 자동으로 등록됩니다.
+                    </div>
+                  )}
+
+                  <button onClick={onClose} style={{ padding: '1rem 3rem', backgroundColor: 'var(--primary)', color: 'var(--on-primary)', borderRadius: '100px', fontWeight: 700, border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>
+                    확인
+                  </button>
                 </div>
               )}
             </div>

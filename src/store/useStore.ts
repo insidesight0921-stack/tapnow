@@ -644,6 +644,26 @@ export const useStore = create<AppState>((set, get) => ({
       status: 'paid',
       method: 'toss'
     }));
+
+    // 요금제가 free가 아닐 경우, 백업 대기 중이던 회원들을 정식 추가
+    if (plan !== 'free') {
+      try {
+        const q = query(collection(db, 'pendingMembers'), where('gymId', '==', gymId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const promises = snap.docs.map(async (docSnap) => {
+            const data = docSnap.data();
+            delete data.createdAt;
+            await addDoc(collection(db, 'members'), cleanData({ ...data, gymId }));
+            await deleteDoc(docSnap.ref);
+          });
+          await Promise.all(promises);
+          console.log(`[업그레이드] 대기 중이던 회원 ${snap.docs.length}명 정식 등록 완료`);
+        }
+      } catch (err) {
+        console.error('Pending members restore error:', err);
+      }
+    }
   },
 
   updateSettings: async (theme, profileImage) => {
