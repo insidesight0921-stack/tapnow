@@ -211,87 +211,93 @@ export default function MembersPage() {
         </div>
       </div>
 
-      {/* 일괄 작업 액션 바 */}
-      {selectedMemberIds.length > 0 && (
-        <div
-          data-testid="bulk-action-bar"
-          style={{
-            position: 'fixed', bottom: '3rem', left: '50%', transform: 'translateX(-50%)',
-            background: 'var(--surface-container-highest)', border: '2px solid var(--tertiary)',
-            padding: '1rem 2rem', borderRadius: 'var(--radius-xl)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-            display: 'flex', alignItems: 'center', gap: '1.5rem', zIndex: 99999, minWidth: isMobile ? '90%' : 'auto',
-            pointerEvents: 'auto'
-          }}
-        >
-          {confirmMode === null ? (
-            <>
-              <div style={{ fontSize: '1rem', fontWeight: 700 }}>
-                <span style={{ color: 'var(--tertiary)' }}>{selectedMemberIds.length}명</span> 선택됨
-              </div>
-              <div style={{ height: '24px', width: '2px', background: 'var(--outline-variant)' }} />
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button 
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setConfirmMode('attendance'); }}
-                  style={{ background: 'var(--primary)', color: '#000', border: 'none', padding: '0.625rem 1.25rem', borderRadius: '0.75rem', fontSize: '0.875rem', fontWeight: 800, cursor: 'pointer' }}
-                >일괄 출석</button>
-                <button 
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setConfirmMode('delete'); }}
-                  style={{ background: 'rgba(255,71,87,0.2)', color: '#ff4757', border: '2px solid #ff4757', padding: '0.625rem 1.25rem', borderRadius: '0.75rem', fontSize: '0.875rem', fontWeight: 800, cursor: 'pointer' }}
-                >일괄 삭제</button>
-                <button 
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setSelectedMemberIds([]); }}
-                  style={{ background: 'transparent', color: 'var(--on-surface-variant)', border: 'none', padding: '0.5rem', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
-                >취소</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: '1rem', fontWeight: 700, color: confirmMode === 'delete' ? 'var(--error)' : 'var(--tertiary)' }}>
-                {confirmMode === 'attendance' ? '일괄 출석을 진행할까요?' : '정말 일괄 삭제하시겠습니까?'}
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button 
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    setIsProcessing(true);
-                    try {
-                      if (confirmMode === 'attendance') {
-                        await bulkMarkAttendance(selectedMemberIds);
-                      } else {
-                        await bulkDeleteMembers(selectedMemberIds);
+      {/* 일괄 작업 액션 바 (Sticky Top 방식) */}
+      <AnimatePresence>
+        {selectedMemberIds.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            style={{
+              position: 'sticky', top: '0.5rem', zIndex: 100, marginBottom: '1.5rem',
+              background: 'var(--surface-container-highest)', border: '2px solid var(--tertiary)',
+              padding: '1rem 1.5rem', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem',
+              overflow: 'hidden'
+            }}
+          >
+            {confirmMode === null ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ fontSize: '1rem', fontWeight: 700 }}>
+                    <span style={{ color: 'var(--tertiary)' }}>{selectedMemberIds.length}명</span> 선택됨
+                  </div>
+                  <div style={{ height: '24px', width: '2px', background: 'var(--outline-variant)' }} />
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button 
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setConfirmMode('attendance'); }}
+                    style={{ background: 'var(--primary)', color: '#000', border: 'none', padding: '0.625rem 1.25rem', borderRadius: '0.75rem', fontSize: '0.875rem', fontWeight: 800, cursor: 'pointer' }}
+                  >일괄 출석</button>
+                  <button 
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setConfirmMode('delete'); }}
+                    style={{ background: 'rgba(255,71,87,0.1)', color: '#ff4757', border: '1px solid #ff4757', padding: '0.625rem 1.25rem', borderRadius: '0.75rem', fontSize: '0.875rem', fontWeight: 800, cursor: 'pointer' }}
+                  >일괄 삭제</button>
+                  <button 
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setSelectedMemberIds([]); }}
+                    style={{ background: 'transparent', color: 'var(--on-surface-variant)', border: 'none', padding: '0.5rem', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
+                  >선택 취소</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '1rem', fontWeight: 700, color: confirmMode === 'delete' ? 'var(--error)' : 'var(--tertiary)' }}>
+                  {confirmMode === 'attendance' ? '선택한 회원을 모두 출석 처리할까요?' : '선택한 회원을 정말 삭제하시겠습니까?'}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button 
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setIsProcessing(true);
+                      try {
+                        if (confirmMode === 'attendance') {
+                          await bulkMarkAttendance(selectedMemberIds);
+                        } else {
+                          await bulkDeleteMembers(selectedMemberIds);
+                        }
+                        setSelectedMemberIds([]);
+                        setConfirmMode(null);
+                      } catch (err) {
+                        console.error('Bulk action error:', err);
+                      } finally {
+                        setIsProcessing(false);
                       }
-                      setSelectedMemberIds([]);
-                      setConfirmMode(null);
-                    } catch (err) {
-                      console.error('Bulk action error:', err);
-                    } finally {
-                      setIsProcessing(false);
-                    }
-                  }}
-                  style={{ 
-                    background: confirmMode === 'delete' ? 'var(--error)' : 'var(--tertiary)', 
-                    color: confirmMode === 'delete' ? '#fff' : '#502400', 
-                    border: 'none', padding: '0.625rem 1.5rem', borderRadius: '0.75rem', 
-                    fontSize: '0.875rem', fontWeight: 800, cursor: 'pointer',
-                    opacity: isProcessing ? 0.5 : 1
-                  }}
-                >{isProcessing ? '처리 중...' : '확인'}</button>
-                <button 
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={(e) => { e.stopPropagation(); setConfirmMode(null); }}
-                  style={{ background: 'var(--surface-container-high)', color: 'var(--on-surface)', border: '1px solid var(--outline-variant)', padding: '0.625rem 1.5rem', borderRadius: '0.75rem', fontSize: '0.875rem', fontWeight: 800, cursor: 'pointer' }}
-                >취소</button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
+                    }}
+                    style={{ 
+                      background: confirmMode === 'delete' ? 'var(--error)' : 'var(--tertiary)', 
+                      color: confirmMode === 'delete' ? '#fff' : '#502400', 
+                      border: 'none', padding: '0.625rem 1.5rem', borderRadius: '0.75rem', 
+                      fontSize: '0.875rem', fontWeight: 800, cursor: 'pointer',
+                      opacity: isProcessing ? 0.5 : 1
+                    }}
+                  >{isProcessing ? '처리 중...' : '확인'}</button>
+                  <button 
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={(e) => { e.stopPropagation(); setConfirmMode(null); }}
+                    style={{ background: 'var(--surface-container-high)', color: 'var(--on-surface)', border: '1px solid var(--outline-variant)', padding: '0.625rem 1.5rem', borderRadius: '0.75rem', fontSize: '0.875rem', fontWeight: 800, cursor: 'pointer' }}
+                  >취소</button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 리스트 */}
       {view === 'card' ? (
