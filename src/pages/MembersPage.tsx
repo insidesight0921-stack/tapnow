@@ -28,6 +28,75 @@ export default function MembersPage() {
   const bulkMarkAttendance = useStore(state => state.bulkMarkAttendance);
   const bulkDeleteMembers = useStore(state => state.bulkDeleteMembers);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const thisMonthPrefix = todayStr.slice(0, 7); // YYYY-MM
+
+  // 통계 계산
+  const gymMembers = members.filter(m => m.gymId === currentGymId || currentGymId === 'ALL');
+  const activeCount = gymMembers.filter(m => !(m.expireDate && new Date(m.expireDate) < new Date())).length;
+  const expiredCount = gymMembers.length - activeCount;
+
+  // 이번 달 매출 (해당 도장 회원만)
+  const thisMonthRevenue = payments
+    .filter(p => gymMembers.some(m => m.id === p.memberId) && p.date.startsWith(thisMonthPrefix) && p.status === '완료')
+    .reduce((sum, p) => sum + p.amount, 0);
+
+
+  // 장기 미출석 (14일 이상)
+  const longAbsentCount = gymMembers.filter(m => {
+    const memberAtt = attendances.filter(a => a.memberId === m.id);
+    if (memberAtt.length === 0) return true;
+    const lastDate = new Date(Math.max(...memberAtt.map(a => new Date(a.date).getTime())));
+    return Math.floor((new Date().getTime() - lastDate.getTime()) / 86400000) >= 14;
+  }).length;
+
+  // 만료 임박 (7일 이내)
+  const expiringCount = gymMembers.filter(m => {
+    if (!m.expireDate || new Date(m.expireDate) < new Date()) return false;
+    const dday = Math.floor((new Date(m.expireDate).getTime() - new Date().getTime()) / 86400000);
+    return dday <= 7;
+  }).length;
+
+  const filteredMembers = gymMembers.filter(m => {
+    const isExpired = m.expireDate && new Date(m.expireDate) < new Date();
+    const status = isExpired ? '만료' : '유효';
+
+    if (filter === '유효' && status !== '유효') return false;
+    if (filter === '만료' && status !== '만료') return false;
+    if (filter === '임박') {
+      if (status !== '유효') return false;
+      const dday = m.expireDate ? Math.floor((new Date(m.expireDate).getTime() - new Date().getTime()) / 86400000) : 999;
+      if (dday > 7) return false;
+    }
+    if (filter === '미출석') {
+      const memberAtt = attendances.filter(a => a.memberId === m.id);
+      if (memberAtt.length === 0) return true;
+      const lastDate = new Date(Math.max(...memberAtt.map(a => new Date(a.date).getTime())));
+      const days = Math.floor((new Date().getTime() - lastDate.getTime()) / 86400000);
+      if (days < 14) return false;
+    }
+
+    if (search && !m.name.includes(search)) return false;
+    return true;
+  });
+
+  const statCards = [
+    { label: '전체 회원', value: gymMembers.length, color: 'var(--tertiary)' },
+    { label: '유효 회원', value: activeCount, color: '#52b788' },
+    { label: '만료 회원', value: expiredCount, color: 'var(--error)' },
+    { label: '이번 달 매출', value: `${thisMonthRevenue.toLocaleString()}원`, color: 'var(--primary)', small: true },
+    { label: '만료 임박', value: `${expiringCount}명`, color: '#ffb700', small: true, highlight: expiringCount > 0 },
+    { label: '장기 미출석 (2주)', value: `${longAbsentCount}명`, color: 'var(--on-surface-variant)', small: true },
+  ];
+
+  const filterOptions: Array<{ key: typeof filter; label: string }> = [
+    { key: '전체', label: '전체' },
+    { key: '유효', label: '유효' },
+    { key: '만료', label: '만료' },
+    { key: '임박', label: `임박 ${expiringCount > 0 ? `(${expiringCount})` : ''}` },
+    { key: '미출석', label: `미출석(2주) ${longAbsentCount > 0 ? `(${longAbsentCount})` : ''}` },
+  ];
+
   // 선택 해제 시 확인 모드도 초기화
   useEffect(() => {
     if (selectedMemberIds.length === 0) setConfirmMode(null);
