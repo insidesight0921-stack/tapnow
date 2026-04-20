@@ -207,57 +207,55 @@ export default function MembersPage() {
       {/* 일괄 작업 액션 바 */}
       {selectedMemberIds.length > 0 && (
         <div
+          data-testid="bulk-action-bar"
           style={{
-            position: 'fixed', bottom: '2rem', left: '50%', transform: 'translateX(-50%)',
-            background: 'var(--surface-container-highest)', border: '1px solid var(--outline-variant)',
-            padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)',
-            display: 'flex', alignItems: 'center', gap: '1.5rem', zIndex: 9999, minWidth: isMobile ? '90%' : 'auto'
+            position: 'fixed', bottom: '3rem', left: '50%', transform: 'translateX(-50%)',
+            background: 'var(--surface-container-highest)', border: '2px solid var(--tertiary)',
+            padding: '1rem 2rem', borderRadius: 'var(--radius-xl)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', gap: '1.5rem', zIndex: 99999, minWidth: isMobile ? '90%' : 'auto',
+            pointerEvents: 'auto'
           }}
         >
-          <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>
+          <div style={{ fontSize: '1rem', fontWeight: 700 }}>
             <span style={{ color: 'var(--tertiary)' }}>{selectedMemberIds.length}명</span> 선택됨
           </div>
-          <div style={{ height: '20px', width: '1px', background: 'var(--outline-variant)' }} />
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ height: '24px', width: '2px', background: 'var(--outline-variant)' }} />
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button 
               type="button"
               onClick={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                const ids = [...selectedMemberIds];
-                if (window.confirm(`${ids.length}명을 일괄 출석 처리하시겠습니까?`)) {
-                  (async () => {
-                    try {
-                      console.log('[MembersPage] Starting bulk attendance...');
-                      await bulkMarkAttendance(ids);
+                console.log('!!! BULK ATTENDANCE CLICKED !!!');
+                const memberIds = [...selectedMemberIds];
+                if (window.confirm(`${memberIds.length}명을 일괄 출석 처리하시겠습니까?`)) {
+                  useStore.getState().bulkMarkAttendance(memberIds)
+                    .then(() => {
                       setSelectedMemberIds([]);
                       window.alert('출석 처리가 완료되었습니다.');
-                    } catch (err) {
-                      window.alert('출석 처리 중 오류가 발생했습니다.');
-                    }
-                  })();
+                    })
+                    .catch(() => window.alert('오류가 발생했습니다.'));
                 }
               }}
-              style={{ background: 'var(--primary)', color: '#000', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+              style={{ background: 'var(--primary)', color: '#000', border: 'none', padding: '0.625rem 1.25rem', borderRadius: '0.75rem', fontSize: '0.875rem', fontWeight: 800, cursor: 'pointer', pointerEvents: 'auto' }}
             >일괄 출석</button>
             <button 
               type="button"
               onClick={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                const ids = [...selectedMemberIds];
-                if (window.confirm(`${ids.length}명을 정말 삭제하시겠습니까? 관련 데이터가 모두 소멸됩니다.`)) {
-                  (async () => {
-                    try {
-                      console.log('[MembersPage] Starting bulk deletion...');
-                      await bulkDeleteMembers(ids);
+                console.log('!!! BULK DELETE CLICKED !!!');
+                const memberIds = [...selectedMemberIds];
+                if (window.confirm(`${memberIds.length}명을 정말 삭제하시겠습니까?`)) {
+                  useStore.getState().bulkDeleteMembers(memberIds)
+                    .then(() => {
                       setSelectedMemberIds([]);
                       window.alert('삭제가 완료되었습니다.');
-                    } catch (err) {
-                      window.alert('삭제 중 오류가 발생했습니다.');
-                    }
-                  })();
+                    })
+                    .catch(() => window.alert('오류가 발생했습니다.'));
                 }
               }}
-              style={{ background: 'rgba(255,71,87,0.1)', color: 'var(--error)', border: '1px solid var(--error)', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+              style={{ background: 'rgba(255,71,87,0.2)', color: '#ff4757', border: '2px solid #ff4757', padding: '0.625rem 1.25rem', borderRadius: '0.75rem', fontSize: '0.875rem', fontWeight: 800, cursor: 'pointer', pointerEvents: 'auto' }}
             >일괄 삭제</button>
             <button 
               type="button"
@@ -265,7 +263,7 @@ export default function MembersPage() {
                 e.stopPropagation();
                 setSelectedMemberIds([]);
               }}
-              style={{ background: 'transparent', color: 'var(--on-surface-variant)', border: 'none', padding: '0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}
+              style={{ background: 'transparent', color: 'var(--on-surface-variant)', border: 'none', padding: '0.5rem', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
             >취소</button>
           </div>
         </div>
