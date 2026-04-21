@@ -147,13 +147,7 @@ export default function KioskPage() {
                 onClick={async (e) => {
                   e.stopPropagation();
                   if (confirm('관리자 계정으로 다시 로그인하여 관리자 페이지로 진입하시겠습니까?')) {
-                    try {
-                      await logout();
-                      navigate('/login', { replace: true });
-                    } catch (err) {
-                      console.error('Logout failed:', err);
-                      navigate('/login', { replace: true });
-                    }
+                    await logout();
                   }
                 }}
                 style={{ 

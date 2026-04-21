@@ -33,7 +33,6 @@ export default function MemberCard({ member, isSelected, onToggleSelection, onDe
   const ticketPlans = member.plans.filter(p => p.type === '횟수권');
   const hasTicket = ticketPlans.length > 0;
   const totalRemaining = hasTicket ? ticketPlans.reduce((s, p) => s + (p.remainingQty ?? 0), 0) : 0;
-  const lowRemaining = hasTicket && totalRemaining <= 3;
 
   // 장기 미출석 (30일 이상)
   const memberAttendances = attendances.filter(a => a.memberId === member.id);
@@ -112,24 +111,17 @@ export default function MemberCard({ member, isSelected, onToggleSelection, onDe
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', minWidth: 0 }}>
           <span style={{ fontSize: '0.6875rem' }}>요금제</span>
-          <span style={{ 
-            color: 'var(--on-surface)', 
-            whiteSpace: 'nowrap', 
-            overflow: 'hidden', 
-            textOverflow: 'ellipsis', 
-            display: 'block',
-            fontWeight: 600
-          }}>
+          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--on-surface)' }}>
             {member.plans.length > 0 ? member.plans.map(p => p.qty > 1 ? `${p.name}×${p.qty}` : p.name).join(', ') : '—'}
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem', marginTop: '0.125rem' }}>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem', marginTop: '0.25rem' }}>
             {hasTicket && (
-              <span style={{ color: lowRemaining ? '#ffb700' : 'var(--on-surface-variant)', fontSize: '0.8125rem', fontWeight: 700 }}>
+              <span style={{ color: totalRemaining <= 3 ? '#ffb700' : 'var(--on-surface-variant)', fontSize: '0.875rem', fontWeight: 600 }}>
                 {totalRemaining}회 남음
               </span>
             )}
             {dday !== null && !isExpired && (
-              <span style={{ color: isUrgent ? 'var(--error)' : isWarning ? '#ffb700' : 'var(--on-surface-variant)', fontSize: '0.8125rem', fontWeight: 700 }}>
+              <span style={{ color: dday <= 3 ? 'var(--error)' : dday <= 7 ? '#ffb700' : 'var(--on-surface-variant)', fontSize: '0.875rem', fontWeight: 600 }}>
                 D-{dday === 0 ? 'Day' : String(dday).padStart(2, '0')}
               </span>
             )}

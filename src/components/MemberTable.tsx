@@ -59,8 +59,6 @@ export default function MemberTable({
             const dday = member.expireDate
               ? Math.floor((new Date(member.expireDate).getTime() - new Date().getTime()) / 86400000)
               : null;
-            const isUrgent = dday !== null && dday >= 0 && dday <= 3;
-            const isWarning = dday !== null && dday >= 0 && dday <= 7 && !isUrgent;
 
             // 횟수권 잔여 횟수 (기간권만 있는 경우 노출하지 않음)
             const ticketPlans = member.plans.filter(p => p.type === '횟수권');
@@ -99,20 +97,22 @@ export default function MemberTable({
                   <span style={{ color: 'var(--tertiary)', letterSpacing: '2px' }}>{'●'.repeat(member.gral)}</span>
                 </td>
                 <td style={{ padding: '1rem', color: 'var(--on-surface)' }}>
-                  <div>{member.plans.length > 0 ? member.plans.map(p => p.qty > 1 ? `${p.name}×${p.qty}` : p.name).join(', ') : '—'}</div>
-                  {hasTicket && (
-                    <div style={{ fontSize: '0.75rem', color: totalRemaining <= 3 ? '#ffb700' : 'var(--on-surface-variant)', marginTop: '0.125rem' }}>
-                      {totalRemaining <= 3 && '⚠️ '}잔여 {totalRemaining}회
-                    </div>
-                  )}
+                  <div style={{ fontWeight: 600 }}>{member.plans.length > 0 ? member.plans.map(p => p.qty > 1 ? `${p.name}×${p.qty}` : p.name).join(', ') : '—'}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem', marginTop: '0.25rem' }}>
+                    {hasTicket && (
+                      <span style={{ color: totalRemaining <= 3 ? '#ffb700' : 'var(--on-surface-variant)', fontSize: '0.8125rem', fontWeight: 700 }}>
+                        {totalRemaining}회 남음
+                      </span>
+                    )}
+                    {dday !== null && !isExpired && (
+                      <span style={{ color: dday <= 3 ? 'var(--error)' : dday <= 7 ? '#ffb700' : 'var(--on-surface-variant)', fontSize: '0.8125rem', fontWeight: 700 }}>
+                        D-{String(dday).padStart(2, '0')}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td style={{ padding: '1rem' }}>
-                  <div style={{ color: isExpired ? 'var(--error)' : 'var(--tertiary)' }}>{member.expireDate || '—'}</div>
-                  {dday !== null && !isExpired && (
-                    <div style={{ fontSize: '0.75rem', color: isUrgent ? 'var(--error)' : isWarning ? '#ffb700' : 'var(--on-surface-variant)', fontWeight: isUrgent || isWarning ? 700 : 400 }}>
-                      {isUrgent ? '🔴' : isWarning ? '⚠️' : ''} D-{String(dday).padStart(2, '0')}
-                    </div>
-                  )}
+                  <div style={{ color: isExpired ? 'var(--error)' : 'var(--tertiary)', fontWeight: 500 }}>{member.expireDate || '—'}</div>
                 </td>
                 <td style={{ padding: '1rem' }}>
                   <span style={{
