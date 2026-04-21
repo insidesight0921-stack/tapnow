@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, CreditCard, History, Phone, Award, Edit2, Check, RotateCcw, Trash2 } from 'lucide-react';
+import { X, Calendar, CreditCard, History, Phone, Award, Edit2, Check, RotateCcw, Trash2, CheckCircle2 } from 'lucide-react';
 import { useStore, type Member, type PlanHistoryItem, type Plan } from '../store/useStore';
 
 interface MemberDetailModalProps {
@@ -12,9 +12,15 @@ interface MemberDetailModalProps {
 export default function MemberDetailModal({ isOpen, onClose, member }: MemberDetailModalProps) {
   const updateMemberHistoryItem = useStore(state => state.updateMemberHistoryItem);
   const deleteMemberHistoryItem = useStore(state => state.deleteMemberHistoryItem);
-  const plans = useStore(state => state.plans);
+  const deleteAttendance = useStore(state => state.deleteAttendance);
+  const customPlans = useStore(state => state.plans);
+  const allAttendances = useStore(state => state.attendances);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<PlanHistoryItem>>({});
+
+  const memberAttendances = allAttendances
+    .filter(a => a.memberId === member?.id)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   if (!member) return null;
 
@@ -170,47 +176,25 @@ export default function MemberDetailModal({ isOpen, onClose, member }: MemberDet
                             </td>
                             <td style={{ padding: '0.75rem', fontWeight: 600 }}>
                               {editingId === h.id ? (
-                                <select 
-                                  value={editValues.planName || h.planName}
-                                  onChange={(e) => {
-                                    const selectedPlan = plans.find(p => p.name === e.target.value);
-                                    if (selectedPlan) {
-                                      const defaultQty = selectedPlan.type === '횟수권' ? (selectedPlan.defaultQty || 10) : 1;
-                                      const defaultMonths = selectedPlan.type === '기간권' ? (selectedPlan.months || 1) : 0;
-                                      setEditValues({ 
-                                        ...editValues, 
-                                        planName: selectedPlan.name,
-                                        planType: selectedPlan.type,
-                                        qty: selectedPlan.type === '횟수권' ? defaultQty : 0,
-                                        months: selectedPlan.type === '기간권' ? defaultMonths : 0,
-                                        amount: selectedPlan.price * (selectedPlan.type === '횟수권' ? defaultQty : 1)
-                                      });
-                                    } else {
-                                      setEditValues({ ...editValues, planName: e.target.value });
-                                    }
-                                  }}
-                                  style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.75rem', padding: '0.25rem', borderRadius: '4px', width: '100%' }}
-                                >
-                                  <option value="">요금제 선택</option>
-                                  {plans.map(p => (
-                                    <option key={p.id} value={p.name}>{p.name}</option>
-                                  ))}
-                                  <option value="custom">직접 입력...</option>
-                                </select>
-                              ) : h.planName}
-                              {editingId === h.id && editValues.planName === 'custom' && (
                                 <input 
                                   type="text"
-                                  placeholder="요금제명 직접 입력"
-                                  value={editValues.planName === 'custom' ? '' : editValues.planName}
+                                  value={editValues.planName || h.planName}
                                   onChange={(e) => setEditValues({ ...editValues, planName: e.target.value })}
-                                  style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.75rem', padding: '0.25rem', borderRadius: '4px', width: '100%', marginTop: '0.25rem' }}
+                                  style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.75rem', padding: '0.25rem', borderRadius: '4px', width: '100%' }}
                                 />
-                              )}
+                              ) : h.planName}
                             </td>
                             <td style={{ padding: '0.75rem' }}>
                               {editingId === h.id ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                  <select 
+                                    value={editValues.planType || h.planType}
+                                    onChange={(e) => setEditValues({ ...editValues, planType: e.target.value as any })}
+                                    style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.7rem', padding: '0.2rem', borderRadius: '4px' }}
+                                  >
+                                    <option value="기간권">기간권</option>
+                                    <option value="횟수권">횟수권</option>
+                                  </select>
                                   <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
                                     <input 
                                       type="number"
@@ -218,21 +202,10 @@ export default function MemberDetailModal({ isOpen, onClose, member }: MemberDet
                                       value={editValues.planType === '횟수권' || (h.planType === '횟수권' && !editValues.planType) ? (editValues.qty ?? h.qty ?? 0) : (editValues.months ?? h.months ?? 0)}
                                       onChange={(e) => {
                                         const val = parseInt(e.target.value);
-                                        const selectedPlan = plans.find(p => p.name === editValues.planName);
                                         if (editValues.planType === '횟수권' || (h.planType === '횟수권' && !editValues.planType)) {
-                                          setEditValues({ 
-                                            ...editValues, 
-                                            qty: val, 
-                                            months: 0,
-                                            amount: selectedPlan ? selectedPlan.price * val : (editValues.amount || 0)
-                                          });
+                                          setEditValues({ ...editValues, qty: val, months: 0 });
                                         } else {
-                                          setEditValues({ 
-                                            ...editValues, 
-                                            months: val, 
-                                            qty: 0,
-                                            amount: selectedPlan ? selectedPlan.price : (editValues.amount || 0)
-                                          });
+                                          setEditValues({ ...editValues, months: val, qty: 0 });
                                         }
                                       }}
                                       style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.7rem', padding: '0.2rem', borderRadius: '4px', width: '40px' }}
@@ -256,56 +229,104 @@ export default function MemberDetailModal({ isOpen, onClose, member }: MemberDet
                             <td style={{ padding: '0.75rem', textAlign: 'right' }}>
                               {editingId === h.id ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginRight: '0.5rem' }}>
+                                    <select
+                                      value={customPlans.find(p => p.name === (editValues.planName || h.planName))?.id || ''}
+                                      onChange={(e) => {
+                                        const p = customPlans.find(cp => cp.id === e.target.value);
+                                        if (p) {
+                                          const qty = p.defaultQty || 1;
+                                          setEditValues({
+                                            ...editValues,
+                                            planName: p.name,
+                                            planType: p.type,
+                                            months: p.months || 0,
+                                            qty: p.type === '횟수권' ? qty : 0,
+                                            amount: p.price * qty
+                                          });
+                                        }
+                                      }}
+                                      style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.7rem', padding: '0.2rem', borderRadius: '4px', width: '100px' }}
+                                    >
+                                      <option value="">요금제 선택</option>
+                                      {customPlans.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                      ))}
+                                    </select>
+                                    <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                                      <input 
+                                        type="number"
+                                        placeholder="개수"
+                                        value={editValues.qty ?? h.qty ?? 1}
+                                        onChange={(e) => {
+                                          const q = parseInt(e.target.value) || 1;
+                                          const p = customPlans.find(cp => cp.name === (editValues.planName || h.planName));
+                                          setEditValues({ 
+                                            ...editValues, 
+                                            qty: q,
+                                            amount: p ? p.price * q : (editValues.amount ?? h.amount)
+                                          });
+                                        }}
+                                        style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.7rem', padding: '0.2rem', borderRadius: '4px', width: '40px' }}
+                                      />
+                                      <span style={{ fontSize: '0.65rem' }}>개(회)</span>
+                                    </div>
+                                  </div>
                                   <input 
                                     type="number"
                                     value={editValues.amount ?? h.amount}
                                     onChange={(e) => setEditValues({ ...editValues, amount: parseInt(e.target.value) })}
                                     style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.75rem', padding: '0.25rem', borderRadius: '4px', width: '60px', textAlign: 'right' }}
                                   />
-                                  <button 
-                                    onClick={async () => {
-                                      await updateMemberHistoryItem(member.id, h.id, editValues);
-                                      setEditingId(null);
-                                      setEditValues({});
-                                    }}
-                                    style={{ background: 'var(--tertiary)', border: 'none', color: '#000', padding: '0.25rem', borderRadius: '4px', cursor: 'pointer' }}
-                                  >
-                                    <Check size={14} />
-                                  </button>
-                                  <button 
-                                    onClick={() => { setEditingId(null); setEditValues({}); }}
-                                    style={{ background: 'var(--surface-container-highest)', border: 'none', color: 'var(--on-surface-variant)', padding: '0.25rem', borderRadius: '4px', cursor: 'pointer' }}
-                                  >
-                                    <RotateCcw size={14} />
-                                  </button>
-                                  <button 
-                                    onClick={async () => {
-                                      if (confirm('이 요금제 기록을 삭제하시겠습니까? 회원의 만료일과 잔여 횟수가 다시 계산됩니다.')) {
-                                        await deleteMemberHistoryItem(member.id, h.id);
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                    <button 
+                                      onClick={async () => {
+                                        await updateMemberHistoryItem(member.id, h.id, editValues);
                                         setEditingId(null);
                                         setEditValues({});
-                                      }
-                                    }}
-                                    style={{ background: 'rgba(255,71,87,0.1)', border: 'none', color: 'var(--error)', padding: '0.25rem', borderRadius: '4px', cursor: 'pointer' }}
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
+                                      }}
+                                      style={{ background: 'var(--tertiary)', border: 'none', color: '#000', padding: '0.25rem', borderRadius: '4px', cursor: 'pointer' }}
+                                    >
+                                      <Check size={14} />
+                                    </button>
+                                    <button 
+                                      onClick={() => { setEditingId(null); setEditValues({}); }}
+                                      style={{ background: 'var(--surface-container-highest)', border: 'none', color: 'var(--on-surface-variant)', padding: '0.25rem', borderRadius: '4px', cursor: 'pointer' }}
+                                    >
+                                      <RotateCcw size={14} />
+                                    </button>
+                                  </div>
                                 </div>
                               ) : (
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
                                   <span>{h.amount.toLocaleString()}원</span>
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingId(h.id);
-                                      setEditValues(h);
-                                    }}
-                                    style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', opacity: 0.6 }}
-                                    onMouseOver={(e) => (e.currentTarget.style.opacity = '1')}
-                                    onMouseOut={(e) => (e.currentTarget.style.opacity = '0.6')}
-                                  >
-                                    <Edit2 size={14} />
-                                  </button>
+                                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingId(h.id);
+                                        setEditValues(h);
+                                      }}
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', opacity: 0.6 }}
+                                      onMouseOver={(e) => (e.currentTarget.style.opacity = '1')}
+                                      onMouseOut={(e) => (e.currentTarget.style.opacity = '0.6')}
+                                    >
+                                      <Edit2 size={14} />
+                                    </button>
+                                    <button 
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (confirm('이 요금제 기록을 삭제하시겠습니까? 삭제 시 회원 상태가 재계산됩니다.')) {
+                                          await deleteMemberHistoryItem(member.id, h.id);
+                                        }
+                                      }}
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--error)', cursor: 'pointer', opacity: 0.6 }}
+                                      onMouseOver={(e) => (e.currentTarget.style.opacity = '1')}
+                                      onMouseOut={(e) => (e.currentTarget.style.opacity = '0.6')}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </td>
@@ -316,6 +337,57 @@ export default function MemberDetailModal({ isOpen, onClose, member }: MemberDet
                   ) : (
                     <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--on-surface-variant)' }}>
                       기록된 요금제 변경 이력이 없습니다.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 출석 기록 */}
+              <div style={{ marginTop: '2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <CheckCircle2 size={18} color="var(--primary)" />
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>최근 출석 기록</h3>
+                </div>
+                
+                <div style={{ 
+                  background: 'var(--surface-container-low)', 
+                  borderRadius: 'var(--radius-lg)', 
+                  border: '1px solid var(--outline-variant)',
+                  maxHeight: '200px',
+                  overflowY: 'auto'
+                }}>
+                  {memberAttendances.length > 0 ? (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--surface-container-highest)', color: 'var(--on-surface-variant)', textAlign: 'left', position: 'sticky', top: 0 }}>
+                          <th style={{ padding: '0.75rem' }}>출석 날짜</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'right' }}>관리</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {memberAttendances.map((a) => (
+                          <tr key={a.id} style={{ borderTop: '1px solid var(--outline-variant)' }}>
+                            <td style={{ padding: '0.75rem', color: 'var(--on-surface)' }}>{a.date}</td>
+                            <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                              <button 
+                                onClick={async () => {
+                                  if (confirm(`${a.date} 출석 기록을 삭제(취소)하시겠습니까? 횟수권인 경우 잔여 횟수가 1회 복구됩니다.`)) {
+                                    await deleteAttendance(a.id);
+                                  }
+                                }}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--error)', cursor: 'pointer', padding: '0.25rem' }}
+                                title="출석 취소"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--on-surface-variant)' }}>
+                      출석 기록이 없습니다.
                     </div>
                   )}
                 </div>

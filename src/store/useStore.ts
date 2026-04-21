@@ -163,10 +163,10 @@ interface AppState extends AppData {
   bulkMarkAttendance: (memberIds: string[]) => Promise<{ success: boolean; count: number; total: number; }>;
   bulkDeleteMembers: (memberIds: string[]) => Promise<void>;
   updateMemberHistoryItem: (memberId: string, historyId: string, updated: Partial<PlanHistoryItem>) => Promise<void>;
-  deleteMemberHistoryItem: (memberId: string, historyId: string) => Promise<void>;
   recalculateMemberStatus: (memberId: string, manualHistory?: PlanHistoryItem[]) => Promise<void>;
   deleteAttendance: (attendanceId: string) => Promise<void>;
   addPastAttendance: (memberId: string, dateStr: string) => Promise<void>;
+  deleteMemberHistoryItem: (memberId: string, historyId: string) => Promise<void>;
 
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
   updatePaymentStatus: (id: string, status: '완료' | '미납') => Promise<void>;
@@ -647,10 +647,9 @@ export const useStore = create<AppState>((set, get) => ({
       h.id === historyId ? { ...h, ...updated } : h
     );
 
-    const cleanedHistory = cleanData(updatedHistory);
-    await updateDoc(doc(db, 'members', memberId), { planHistory: cleanedHistory });
+    await updateDoc(doc(db, 'members', memberId), { planHistory: updatedHistory });
     // 히스토리 수정 후 주입된 데이터로 즉시 재계산 실행
-    await get().recalculateMemberStatus(memberId, cleanedHistory);
+    await get().recalculateMemberStatus(memberId, updatedHistory);
   },
 
   deleteMemberHistoryItem: async (memberId, historyId) => {
@@ -659,11 +658,10 @@ export const useStore = create<AppState>((set, get) => ({
     if (!member || !member.planHistory) return;
 
     const updatedHistory = member.planHistory.filter(h => h.id !== historyId);
-    
-    const cleanedHistory = cleanData(updatedHistory);
-    await updateDoc(doc(db, 'members', memberId), { planHistory: cleanedHistory });
-    // 히스토리 삭제 후 즉시 재계산 실행
-    await get().recalculateMemberStatus(memberId, cleanedHistory);
+
+    await updateDoc(doc(db, 'members', memberId), { planHistory: updatedHistory });
+    // 삭제 후 즉시 재계산 실행
+    await get().recalculateMemberStatus(memberId, updatedHistory);
   },
 
   recalculateMemberStatus: async (memberId, manualHistory) => {
