@@ -73,6 +73,7 @@ export default function MemberCard({ member, isSelected, onToggleSelection, onDe
               type="checkbox" 
               checked={isSelected} 
               onChange={() => onToggleSelection(member.id)}
+              onClick={(e) => e.stopPropagation()}
               style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--tertiary)', marginTop: '0.25rem', flexShrink: 0 }}
             />
           )}
