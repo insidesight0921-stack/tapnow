@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, CreditCard, History, Phone, Award, Edit2, Check, RotateCcw } from 'lucide-react';
-import { useStore, type Member, type PlanHistoryItem } from '../store/useStore';
+import { X, Calendar, CreditCard, History, Phone, Award, Edit2, Check, RotateCcw, Trash2 } from 'lucide-react';
+import { useStore, type Member, type PlanHistoryItem, type Plan } from '../store/useStore';
 
 interface MemberDetailModalProps {
   isOpen: boolean;
@@ -11,6 +11,8 @@ interface MemberDetailModalProps {
 
 export default function MemberDetailModal({ isOpen, onClose, member }: MemberDetailModalProps) {
   const updateMemberHistoryItem = useStore(state => state.updateMemberHistoryItem);
+  const deleteMemberHistoryItem = useStore(state => state.deleteMemberHistoryItem);
+  const plans = useStore(state => state.plans);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<PlanHistoryItem>>({});
 
@@ -168,25 +170,47 @@ export default function MemberDetailModal({ isOpen, onClose, member }: MemberDet
                             </td>
                             <td style={{ padding: '0.75rem', fontWeight: 600 }}>
                               {editingId === h.id ? (
+                                <select 
+                                  value={editValues.planName || h.planName}
+                                  onChange={(e) => {
+                                    const selectedPlan = plans.find(p => p.name === e.target.value);
+                                    if (selectedPlan) {
+                                      const defaultQty = selectedPlan.type === '횟수권' ? (selectedPlan.defaultQty || 10) : 1;
+                                      const defaultMonths = selectedPlan.type === '기간권' ? (selectedPlan.months || 1) : 0;
+                                      setEditValues({ 
+                                        ...editValues, 
+                                        planName: selectedPlan.name,
+                                        planType: selectedPlan.type,
+                                        qty: selectedPlan.type === '횟수권' ? defaultQty : 0,
+                                        months: selectedPlan.type === '기간권' ? defaultMonths : 0,
+                                        amount: selectedPlan.price * (selectedPlan.type === '횟수권' ? defaultQty : 1)
+                                      });
+                                    } else {
+                                      setEditValues({ ...editValues, planName: e.target.value });
+                                    }
+                                  }}
+                                  style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.75rem', padding: '0.25rem', borderRadius: '4px', width: '100%' }}
+                                >
+                                  <option value="">요금제 선택</option>
+                                  {plans.map(p => (
+                                    <option key={p.id} value={p.name}>{p.name}</option>
+                                  ))}
+                                  <option value="custom">직접 입력...</option>
+                                </select>
+                              ) : h.planName}
+                              {editingId === h.id && editValues.planName === 'custom' && (
                                 <input 
                                   type="text"
-                                  value={editValues.planName || h.planName}
+                                  placeholder="요금제명 직접 입력"
+                                  value={editValues.planName === 'custom' ? '' : editValues.planName}
                                   onChange={(e) => setEditValues({ ...editValues, planName: e.target.value })}
-                                  style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.75rem', padding: '0.25rem', borderRadius: '4px', width: '100%' }}
+                                  style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.75rem', padding: '0.25rem', borderRadius: '4px', width: '100%', marginTop: '0.25rem' }}
                                 />
-                              ) : h.planName}
+                              )}
                             </td>
                             <td style={{ padding: '0.75rem' }}>
                               {editingId === h.id ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                  <select 
-                                    value={editValues.planType || h.planType}
-                                    onChange={(e) => setEditValues({ ...editValues, planType: e.target.value as any })}
-                                    style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.7rem', padding: '0.2rem', borderRadius: '4px' }}
-                                  >
-                                    <option value="기간권">기간권</option>
-                                    <option value="횟수권">횟수권</option>
-                                  </select>
                                   <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
                                     <input 
                                       type="number"
@@ -194,10 +218,21 @@ export default function MemberDetailModal({ isOpen, onClose, member }: MemberDet
                                       value={editValues.planType === '횟수권' || (h.planType === '횟수권' && !editValues.planType) ? (editValues.qty ?? h.qty ?? 0) : (editValues.months ?? h.months ?? 0)}
                                       onChange={(e) => {
                                         const val = parseInt(e.target.value);
+                                        const selectedPlan = plans.find(p => p.name === editValues.planName);
                                         if (editValues.planType === '횟수권' || (h.planType === '횟수권' && !editValues.planType)) {
-                                          setEditValues({ ...editValues, qty: val, months: 0 });
+                                          setEditValues({ 
+                                            ...editValues, 
+                                            qty: val, 
+                                            months: 0,
+                                            amount: selectedPlan ? selectedPlan.price * val : (editValues.amount || 0)
+                                          });
                                         } else {
-                                          setEditValues({ ...editValues, months: val, qty: 0 });
+                                          setEditValues({ 
+                                            ...editValues, 
+                                            months: val, 
+                                            qty: 0,
+                                            amount: selectedPlan ? selectedPlan.price : (editValues.amount || 0)
+                                          });
                                         }
                                       }}
                                       style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.7rem', padding: '0.2rem', borderRadius: '4px', width: '40px' }}
@@ -242,6 +277,18 @@ export default function MemberDetailModal({ isOpen, onClose, member }: MemberDet
                                     style={{ background: 'var(--surface-container-highest)', border: 'none', color: 'var(--on-surface-variant)', padding: '0.25rem', borderRadius: '4px', cursor: 'pointer' }}
                                   >
                                     <RotateCcw size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={async () => {
+                                      if (confirm('이 요금제 기록을 삭제하시겠습니까? 회원의 만료일과 잔여 횟수가 다시 계산됩니다.')) {
+                                        await deleteMemberHistoryItem(member.id, h.id);
+                                        setEditingId(null);
+                                        setEditValues({});
+                                      }
+                                    }}
+                                    style={{ background: 'rgba(255,71,87,0.1)', border: 'none', color: 'var(--error)', padding: '0.25rem', borderRadius: '4px', cursor: 'pointer' }}
+                                  >
+                                    <Trash2 size={14} />
                                   </button>
                                 </div>
                               ) : (

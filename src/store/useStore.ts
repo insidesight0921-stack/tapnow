@@ -163,6 +163,7 @@ interface AppState extends AppData {
   bulkMarkAttendance: (memberIds: string[]) => Promise<{ success: boolean; count: number; total: number; }>;
   bulkDeleteMembers: (memberIds: string[]) => Promise<void>;
   updateMemberHistoryItem: (memberId: string, historyId: string, updated: Partial<PlanHistoryItem>) => Promise<void>;
+  deleteMemberHistoryItem: (memberId: string, historyId: string) => Promise<void>;
   recalculateMemberStatus: (memberId: string, manualHistory?: PlanHistoryItem[]) => Promise<void>;
   deleteAttendance: (attendanceId: string) => Promise<void>;
   addPastAttendance: (memberId: string, dateStr: string) => Promise<void>;
@@ -646,9 +647,23 @@ export const useStore = create<AppState>((set, get) => ({
       h.id === historyId ? { ...h, ...updated } : h
     );
 
-    await updateDoc(doc(db, 'members', memberId), { planHistory: updatedHistory });
+    const cleanedHistory = cleanData(updatedHistory);
+    await updateDoc(doc(db, 'members', memberId), { planHistory: cleanedHistory });
     // 히스토리 수정 후 주입된 데이터로 즉시 재계산 실행
-    await get().recalculateMemberStatus(memberId, updatedHistory);
+    await get().recalculateMemberStatus(memberId, cleanedHistory);
+  },
+
+  deleteMemberHistoryItem: async (memberId, historyId) => {
+    const { members } = get();
+    const member = members.find(m => m.id === memberId);
+    if (!member || !member.planHistory) return;
+
+    const updatedHistory = member.planHistory.filter(h => h.id !== historyId);
+    
+    const cleanedHistory = cleanData(updatedHistory);
+    await updateDoc(doc(db, 'members', memberId), { planHistory: cleanedHistory });
+    // 히스토리 삭제 후 즉시 재계산 실행
+    await get().recalculateMemberStatus(memberId, cleanedHistory);
   },
 
   recalculateMemberStatus: async (memberId, manualHistory) => {
