@@ -147,8 +147,15 @@ export default function KioskPage() {
                 onClick={async (e) => {
                   e.stopPropagation();
                     if (confirm('관리자 계정으로 다시 로그인하여 관리자 페이지로 진입하시겠습니까?')) {
-                      await logout();
-                      navigate('/login');
+                      try {
+                        console.log('Logging out for PIN reset...');
+                        await logout();
+                        console.log('Logout successful, redirecting...');
+                        window.location.href = '/login';
+                      } catch (err) {
+                        console.error('Logout error:', err);
+                        window.location.href = '/login'; // 에러가 나더라도 로그인 페이지로 이동 시도
+                      }
                     }
                 }}
                 style={{ 

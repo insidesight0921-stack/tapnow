@@ -92,7 +92,12 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
     try {
       // 3. 만료일 및 요금제 히스토리 계산
       let expireDate = memberToEdit ? memberToEdit.expireDate : '';
-      let plansArr = memberToEdit ? [...memberToEdit.plans] : [];
+      
+      // 신규 요금제 결제가 있는 경우 기존 요금제 배열을 비우고 새로 시작 (기록은 planHistory에 남음)
+      // 결제가 없는 경우(정보 수정)만 기존 요금제 유지
+      const hasNewPayment = Object.values(formData.planQs).some(q => q > 0);
+      let plansArr = (memberToEdit && !hasNewPayment) ? [...memberToEdit.plans] : [];
+      
       let newHistoryItems: PlanHistoryItem[] = [];
 
       const today = new Date();
