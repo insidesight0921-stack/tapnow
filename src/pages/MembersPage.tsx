@@ -94,7 +94,13 @@ export default function MembersPage() {
       if (days < 14) return false;
     }
 
-    if (search && !m.name.includes(search)) return false;
+    if (search) {
+      const lowerSearch = search.toLowerCase();
+      const match = m.name.toLowerCase().includes(lowerSearch) || 
+                    m.phone.replace(/-/g, '').includes(lowerSearch) || 
+                    (m.memo && m.memo.toLowerCase().includes(lowerSearch));
+      if (!match) return false;
+    }
     return true;
   });
 

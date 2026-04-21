@@ -146,9 +146,10 @@ export default function KioskPage() {
                 type="button"
                 onClick={async (e) => {
                   e.stopPropagation();
-                  if (confirm('관리자 계정으로 다시 로그인하여 관리자 페이지로 진입하시겠습니까?')) {
-                    await logout();
-                  }
+                    if (confirm('관리자 계정으로 다시 로그인하여 관리자 페이지로 진입하시겠습니까?')) {
+                      await logout();
+                      navigate('/login');
+                    }
                 }}
                 style={{ 
                   marginTop: '1.5rem', background: 'transparent', border: 'none', 

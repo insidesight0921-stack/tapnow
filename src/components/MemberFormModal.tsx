@@ -47,7 +47,7 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
         belt: memberToEdit.belt,
         gral: memberToEdit.gral,
         registerDate: memberToEdit.registerDate,
-        startDate: memberToEdit.startDate,
+        startDate: new Date().toISOString().split('T')[0],
         planQs: {} as Record<string, number>, // 신규 추가할 요금제만 관리
         paymentAmount: 0,
         paymentMethod: '카드 결제',

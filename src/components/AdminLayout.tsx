@@ -1,5 +1,5 @@
 
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import MemberFormModal from './MemberFormModal';
 import PlanManageModal from './PlanManageModal';
@@ -42,6 +42,18 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const profileImage = useStore(state => state.profileImage);
+  const location = useLocation();
+
+  const getPageTitle = () => {
+    switch (location.pathname) {
+      case '/admin/members': return '회원 관리';
+      case '/admin/attendance': return '출석 현황';
+      case '/admin/payments': return '결제 관리';
+      case '/admin/plan': return '멤버십 구독';
+      case '/admin/settings': return '도장 설정';
+      default: return '';
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -135,16 +147,16 @@ export default function AdminLayout() {
         </div>
 
         <nav style={{ flex: 1, padding: '1.5rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-          <NavLink to="/admin/members" style={{ ...navStyle({ isActive: false }), whiteSpace: 'nowrap' }} onClick={handleNavLinkClick}>
+          <NavLink to="/admin/members" style={(props) => ({ ...navStyle(props), whiteSpace: 'nowrap' })} onClick={handleNavLinkClick}>
             👥 회원 관리
           </NavLink>
-          <NavLink to="/admin/attendance" style={{ ...navStyle({ isActive: false }), whiteSpace: 'nowrap' }} onClick={handleNavLinkClick}>
+          <NavLink to="/admin/attendance" style={(props) => ({ ...navStyle(props), whiteSpace: 'nowrap' })} onClick={handleNavLinkClick}>
             📋 출석 현황
           </NavLink>
-          <NavLink to="/admin/payments" style={{ ...navStyle({ isActive: false }), whiteSpace: 'nowrap' }} onClick={handleNavLinkClick}>
+          <NavLink to="/admin/payments" style={(props) => ({ ...navStyle(props), whiteSpace: 'nowrap' })} onClick={handleNavLinkClick}>
             💳 결제 관리
           </NavLink>
-          <NavLink to="/admin/plan" style={{ ...navStyle({ isActive: false }), whiteSpace: 'nowrap' }} onClick={handleNavLinkClick}>
+          <NavLink to="/admin/plan" style={(props) => ({ ...navStyle(props), whiteSpace: 'nowrap' })} onClick={handleNavLinkClick}>
             🚀 멤버십 구독
           </NavLink>
 
@@ -233,6 +245,10 @@ export default function AdminLayout() {
                   {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
                 </button>
               )}
+              
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--on-surface)', whiteSpace: 'nowrap', margin: 0 }}>
+                {getPageTitle()}
+              </h2>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
                 {isEndOfMonth && (

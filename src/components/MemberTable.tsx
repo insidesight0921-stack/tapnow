@@ -56,7 +56,7 @@ export default function MemberTable({
             const attendedToday = attendances.some(a => a.memberId === member.id && a.date === todayStr);
 
             // D-day 계산
-            const dday = member.expireDate
+            const dday = member.expireDate && !isNaN(new Date(member.expireDate).getTime())
               ? Math.floor((new Date(member.expireDate).getTime() - new Date().getTime()) / 86400000)
               : null;
 
@@ -98,17 +98,10 @@ export default function MemberTable({
                 </td>
                 <td style={{ padding: '1rem', color: 'var(--on-surface)' }}>
                   <div style={{ fontWeight: 600 }}>{member.plans.length > 0 ? member.plans.map(p => p.qty > 1 ? `${p.name}×${p.qty}` : p.name).join(', ') : '—'}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem', marginTop: '0.25rem' }}>
-                    {hasTicket && (
-                      <span style={{ color: totalRemaining <= 3 ? '#ffb700' : 'var(--on-surface-variant)', fontSize: '0.8125rem', fontWeight: 700 }}>
-                        {totalRemaining}회 남음
-                      </span>
-                    )}
-                    {dday !== null && !isExpired && (
-                      <span style={{ color: dday <= 3 ? 'var(--error)' : dday <= 7 ? '#ffb700' : 'var(--on-surface-variant)', fontSize: '0.8125rem', fontWeight: 700 }}>
-                        D-{String(dday).padStart(2, '0')}
-                      </span>
-                    )}
+                  <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--on-surface-variant)', marginTop: '0.25rem' }}>
+                    {hasTicket ? `${totalRemaining}회` : ''}
+                    {hasTicket && dday !== null && !isExpired ? ' / ' : ''}
+                    {dday !== null && !isExpired ? `D-${dday === 0 ? 'Day' : String(dday).padStart(2, '0')}` : (!hasTicket ? '—' : '')}
                   </div>
                 </td>
                 <td style={{ padding: '1rem' }}>
