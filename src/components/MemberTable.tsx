@@ -1,14 +1,18 @@
 import { useStore, type Member } from '../store/useStore';
-import { Trash2, Edit2 } from 'lucide-react';
+import { Trash2, Edit2, History } from 'lucide-react';
 
 interface MemberTableProps {
   members: Member[];
   selectedIds: string[];
   onToggleSelection: (id: string) => void;
   onToggleAll: (ids: string[]) => void;
+  onDetail?: (member: Member) => void;
+  onAttendanceSuccess?: (data: any) => void;
 }
 
-export default function MemberTable({ members, selectedIds, onToggleSelection, onToggleAll }: MemberTableProps) {
+export default function MemberTable({ 
+  members, selectedIds, onToggleSelection, onToggleAll, onDetail, onAttendanceSuccess 
+}: MemberTableProps) {
   const markAttendance = useStore(state => state.markAttendance);
   const deleteMember = useStore(state => state.deleteMember);
   const openMemberModal = useStore(state => state.openMemberModal);
@@ -58,10 +62,10 @@ export default function MemberTable({ members, selectedIds, onToggleSelection, o
             const isUrgent = dday !== null && dday >= 0 && dday <= 3;
             const isWarning = dday !== null && dday >= 0 && dday <= 7 && !isUrgent;
 
-            // 잔여 횟수
-            const ticketPlans = member.plans.filter(p => p.type === '횟수권' && p.remainingQty !== undefined);
-            const totalRemaining = ticketPlans.reduce((s, p) => s + (p.remainingQty ?? 0), 0);
+            // 횟수권 잔여 횟수 (기간권만 있는 경우 노출하지 않음)
+            const ticketPlans = member.plans.filter(p => p.type === '횟수권');
             const hasTicket = ticketPlans.length > 0;
+            const totalRemaining = hasTicket ? ticketPlans.reduce((s, p) => s + (p.remainingQty ?? 0), 0) : 0;
 
             return (
               <tr key={member.id}
@@ -79,7 +83,7 @@ export default function MemberTable({ members, selectedIds, onToggleSelection, o
                 </td>
                 <td 
                   style={{ padding: '1rem', fontWeight: 600, color: 'var(--on-surface)', cursor: 'pointer' }}
-                  onClick={() => openMemberModal(member)}
+                  onClick={() => onDetail && onDetail(member)}
                 >
                   {member.name}
                 </td>
@@ -106,7 +110,7 @@ export default function MemberTable({ members, selectedIds, onToggleSelection, o
                   <div style={{ color: isExpired ? 'var(--error)' : 'var(--tertiary)' }}>{member.expireDate || '—'}</div>
                   {dday !== null && !isExpired && (
                     <div style={{ fontSize: '0.75rem', color: isUrgent ? 'var(--error)' : isWarning ? '#ffb700' : 'var(--on-surface-variant)', fontWeight: isUrgent || isWarning ? 700 : 400 }}>
-                      {isUrgent ? '🔴' : isWarning ? '⚠️' : ''} D-{dday}
+                      {isUrgent ? '🔴' : isWarning ? '⚠️' : ''} D-{String(dday).padStart(2, '0')}
                     </div>
                   )}
                 </td>
@@ -132,12 +136,27 @@ export default function MemberTable({ members, selectedIds, onToggleSelection, o
                       onClick={async () => {
                         if (attendedToday) return;
                         const res = await markAttendance(member.id);
-                        alert(res.message);
+                        if (onAttendanceSuccess && res.success) {
+                          onAttendanceSuccess(res.data);
+                        } else if (!res.success) {
+                          alert(res.message);
+                        }
                       }}
                     >{attendedToday ? '✅ 완료' : '출석'}</button>
                       <button
                         style={{
                           background: 'rgba(52,152,219,0.1)', border: 'none', color: '#3498db',
+                          borderRadius: 'var(--radius-md)', padding: '0.25rem 0.5rem',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => onDetail && onDetail(member)}
+                        title="상세 보기"
+                      >
+                        <History size={16} />
+                      </button>
+                      <button
+                        style={{
+                          background: 'rgba(155,89,182,0.1)', border: 'none', color: '#9b59b6',
                           borderRadius: 'var(--radius-md)', padding: '0.25rem 0.5rem',
                           cursor: 'pointer'
                         }}

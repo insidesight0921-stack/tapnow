@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, User, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 import { useStore, type Member } from '../store/useStore';
+import AttendanceResultPopup from '../components/AttendanceResultPopup';
 
 export default function KioskPage() {
   const navigate = useNavigate();
@@ -177,6 +178,8 @@ function KioskCard({ gymName, isMobile }: { gymName: string, isMobile: boolean }
   const [matchingMembers, setMatchingMembers] = useState<Member[]>([]);
   const [statusMsg, setStatusMsg] = useState('');
   const [checkedInfo, setCheckedInfo] = useState<{ remaining?: number, dday?: number, isWarning: boolean, type?: '기간권' | '횟수권' } | null>(null);
+  const [attendanceResult, setAttendanceResult] = useState<any>(null);
+  const [isResultPopupOpen, setIsResultPopupOpen] = useState(false);
 
   const handleNumberClick = (num: string) => {
     if (status !== 'IDLE' && status !== 'MULTIPLE') { 
@@ -207,29 +210,12 @@ function KioskCard({ gymName, isMobile }: { gymName: string, isMobile: boolean }
       setCheckedName(member.name);
       setStatusMsg(res.message);
       
-      const ticketPlans = member.plans.filter(p => p.type === '횟수권');
-
-      if (ticketPlans.length > 0) {
-        const totalRem = ticketPlans.reduce((s, p) => s + (p.remainingQty ?? 0), 0);
-        setCheckedInfo({ 
-          remaining: totalRem - 1, 
-          isWarning: res.message.includes('부족'),
-          type: '횟수권'
-        });
-      } else if (member.expireDate) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const target = new Date(member.expireDate);
-        target.setHours(0, 0, 0, 0);
-        const diffTime = target.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        setCheckedInfo({
-          dday: diffDays,
-          isWarning: diffDays < 0,
-          type: '기간권'
-        });
+      // 스토어에서 반환된 풍부한 데이터 사용
+      if (res.data) {
+        setAttendanceResult(res.data);
+        setIsResultPopupOpen(true);
       }
+      
       setStatus('SUCCESS');
       
       setTimeout(() => {
@@ -373,7 +359,7 @@ function KioskCard({ gymName, isMobile }: { gymName: string, isMobile: boolean }
 
             {/* 상태 메시지 (간결하게 한 줄로) */}
             <AnimatePresence>
-              {status !== 'IDLE' && status !== 'LOADING' && (
+              {status !== 'IDLE' && status !== 'LOADING' && !isResultPopupOpen && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -434,6 +420,11 @@ function KioskCard({ gymName, isMobile }: { gymName: string, isMobile: boolean }
           </motion.div>
         )}
       </AnimatePresence>
+      <AttendanceResultPopup 
+        isOpen={isResultPopupOpen} 
+        onClose={() => setIsResultPopupOpen(false)} 
+        data={attendanceResult} 
+      />
     </motion.div>
   );
 }

@@ -40,6 +40,15 @@ export interface PlanItem {
   type?: '횟수권' | '기간권';
 }
 
+export interface PlanHistoryItem {
+  id: string;
+  date: string;
+  planName: string;
+  amount: number;
+  months: number;
+  type: '신규' | '연장' | '변경';
+}
+
 export interface Member {
   id: string;
   gymId: string;
@@ -54,6 +63,7 @@ export interface Member {
   paymentMethod: string;
   expireDate: string;
   memo: string;
+  planHistory?: PlanHistoryItem[];
 }
 
 export interface Attendance {
@@ -137,8 +147,18 @@ interface AppState extends AppData {
   updatePlan: (id: string, plan: Partial<Plan>) => Promise<void>;
   deletePlan: (id: string) => Promise<void>;
 
-  markAttendance: (memberId: string) => Promise<{ success: boolean; message: string }>;
-  bulkMarkAttendance: (memberIds: string[]) => Promise<void>;
+  markAttendance: (memberId: string) => Promise<{ 
+    success: boolean; 
+    message: string; 
+    data?: { 
+      memberName: string;
+      remainingQty?: number;
+      remainingDays?: number;
+      isExpired: boolean;
+      type: '횟수권' | '기간권' | 'mixed';
+    } 
+  }>;
+  bulkMarkAttendance: (memberIds: string[]) => Promise<{ success: boolean; count: number; total: number; }>;
   bulkDeleteMembers: (memberIds: string[]) => Promise<void>;
   deleteAttendance: (attendanceId: string) => Promise<void>;
   addPastAttendance: (memberId: string, dateStr: string) => Promise<void>;
@@ -162,7 +182,12 @@ interface AppState extends AppData {
   closeCsvModal: () => void;
 }
 
-const getTodayStr = () => new Date().toISOString().split('T')[0];
+const getTodayStr = () => {
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000;
+  const kstDate = new Date(now.getTime() + kstOffset);
+  return kstDate.toISOString().split('T')[0];
+};
 
 const cleanData = (obj: any): any => {
   if (obj === undefined) return null;
@@ -519,12 +544,25 @@ export const useStore = create<AppState>((set, get) => ({
       return { success: false, message: '이미 출석했습니다.' };
     }
 
-    // 0회여도 출석은 하되, 경고만 전달 (UI에서 처리)
-    let isWarning = false;
+    const isExpired = member.expireDate && new Date(member.expireDate) < new Date();
+
+    let remainingQty: number | undefined = undefined;
+    let remainingDays: number | undefined = undefined;
+    let attType: '횟수권' | '기간권' | 'mixed' = '기간권';
+
     const ticketPlans = member.plans.filter(p => p.type === '횟수권');
+    const periodPlans = member.plans.filter(p => p.type === '기간권' || !p.type);
+
+    if (ticketPlans.length > 0 && periodPlans.length > 0) attType = 'mixed';
+    else if (ticketPlans.length > 0) attType = '횟수권';
+
     if (ticketPlans.length > 0) {
-      const totalRem = ticketPlans.reduce((s, p) => s + (p.remainingQty ?? 0), 0);
-      if (totalRem <= 0) isWarning = true;
+      remainingQty = ticketPlans.reduce((s, p) => s + (p.remainingQty ?? 0), 0);
+    }
+    
+    if (member.expireDate) {
+      const exp = new Date(member.expireDate);
+      remainingDays = Math.max(0, Math.ceil((exp.getTime() - new Date().getTime()) / 86400000));
     }
 
     await addDoc(collection(db, 'attendances'), {
@@ -545,28 +583,42 @@ export const useStore = create<AppState>((set, get) => ({
 
       const updatedPlans = [...member.plans];
       const p = updatedPlans[targetIdx];
-      updatedPlans[targetIdx] = { ...p, remainingQty: Math.max(-99, (p.remainingQty ?? 0) - 1) };
+      const newQty = Math.max(-99, (p.remainingQty ?? 0) - 1);
+      updatedPlans[targetIdx] = { ...p, remainingQty: newQty };
+      
+      // 개별 횟수 차감 후 전체 잔여량 다시 계산 (팝업용)
+      remainingQty = updatedPlans
+        .filter(up => up.type === '횟수권')
+        .reduce((s, up) => s + (up.remainingQty ?? 0), 0);
+
       const cleanedPlans = cleanData(updatedPlans);
       await updateDoc(doc(db, 'members', memberId), { plans: cleanedPlans });
     }
     
+    const isWarning = (attType === '횟수권' && (remainingQty ?? 0) <= 0) || (attType === '기간권' && isExpired);
+
     return { 
       success: true, 
-      message: isWarning ? '잔여 횟수가 부족하지만 출석 처리되었습니다.' : '출석이 완료되었습니다.' 
+      message: isWarning ? '잔여 횟수/기간이 만료되었지만 출석 처리되었습니다.' : '출석이 완료되었습니다.',
+      data: {
+        memberName: member.name,
+        remainingQty,
+        remainingDays: remainingDays !== undefined ? Math.max(0, remainingDays) : undefined,
+        isExpired: !!isExpired,
+        type: attType
+      }
     };
   },
 
   bulkMarkAttendance: async (memberIds) => {
     console.log(`[Bulk] Starting attendance for ${memberIds.length} members...`);
-    const startTime = Date.now();
-    try {
-      // 병행 처리를 위해 Promise.all 사용 (단, Firestore 부하를 고려해 한 번에 너무 많으면 나눠야 할 수도 있음)
-      await Promise.all(memberIds.map(id => get().markAttendance(id)));
-      console.log(`[Bulk] Attendance completed in ${Date.now() - startTime}ms`);
-    } catch (err) {
-      console.error('[Bulk] Attendance failed:', err);
-      throw err;
-    }
+    const results = await Promise.all(memberIds.map(id => get().markAttendance(id)));
+    const successCount = results.filter(r => r.success).length;
+    return {
+      success: true,
+      count: successCount,
+      total: memberIds.length
+    };
   },
 
   bulkDeleteMembers: async (memberIds) => {

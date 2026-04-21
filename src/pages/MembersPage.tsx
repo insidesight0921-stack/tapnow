@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useStore } from '../store/useStore';
+import { useStore, type Member } from '../store/useStore';
 import MemberCard from '../components/MemberCard';
 import MemberTable from '../components/MemberTable';
+import MemberDetailModal from '../components/MemberDetailModal';
+import AttendanceResultPopup from '../components/AttendanceResultPopup';
 import { Search, LayoutGrid, List } from 'lucide-react';
 
 export default function MembersPage() {
@@ -24,6 +26,22 @@ export default function MembersPage() {
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [confirmMode, setConfirmMode] = useState<'attendance' | 'delete' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  const [detailMember, setDetailMember] = useState<Member | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  
+  const [attendanceResult, setAttendanceResult] = useState<any>(null);
+  const [isAttendanceResultOpen, setIsAttendanceResultOpen] = useState(false);
+
+  const openDetail = (member: Member) => {
+    setDetailMember(member);
+    setIsDetailModalOpen(true);
+  };
+  
+  const showAttendanceSuccess = (data: any) => {
+    setAttendanceResult(data);
+    setIsAttendanceResultOpen(true);
+  };
 
   const bulkMarkAttendance = useStore(state => state.bulkMarkAttendance);
   const bulkDeleteMembers = useStore(state => state.bulkDeleteMembers);
@@ -266,7 +284,12 @@ export default function MembersPage() {
                       setIsProcessing(true);
                       try {
                         if (confirmMode === 'attendance') {
-                          await bulkMarkAttendance(selectedMemberIds);
+                          const res = await bulkMarkAttendance(selectedMemberIds);
+                          showAttendanceSuccess({
+                            type: 'bulk',
+                            count: res.count,
+                            total: res.total
+                          });
                         } else {
                           await bulkDeleteMembers(selectedMemberIds);
                         }
@@ -312,6 +335,8 @@ export default function MembersPage() {
                   prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
                 );
               }}
+              onDetail={openDetail}
+              onAttendanceSuccess={showAttendanceSuccess}
             />
           ))}
           {filteredMembers.length === 0 && (
@@ -333,9 +358,24 @@ export default function MembersPage() {
                 prev.length === ids.length ? [] : ids
               );
             }}
+            onDetail={openDetail}
+            onAttendanceSuccess={showAttendanceSuccess}
           />
         </div>
       )}
+
+      {/* 모달들 */}
+      <MemberDetailModal 
+        isOpen={isDetailModalOpen} 
+        onClose={() => setIsDetailModalOpen(false)} 
+        member={detailMember} 
+      />
+      
+      <AttendanceResultPopup 
+        isOpen={isAttendanceResultOpen} 
+        onClose={() => setIsAttendanceResultOpen(false)} 
+        data={attendanceResult} 
+      />
     </div>
   );
 }

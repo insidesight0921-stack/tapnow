@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
-import { useStore, type Member } from '../store/useStore';
+import { useStore, type Member, type PlanHistoryItem } from '../store/useStore';
 
 interface MemberFormModalProps {
   isOpen: boolean;
@@ -48,15 +48,9 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
         gral: memberToEdit.gral,
         registerDate: memberToEdit.registerDate,
         startDate: memberToEdit.startDate,
-        planQs: memberToEdit.plans.reduce((acc, p) => {
-          const matched = customPlans.find(cp => cp.name === p.name);
-          if (matched) {
-            acc[matched.id] = (acc[matched.id] || 0) + 1;
-          }
-          return acc;
-        }, {} as Record<string, number>),
-        paymentAmount: memberToEdit.paymentAmount,
-        paymentMethod: memberToEdit.paymentMethod,
+        planQs: {} as Record<string, number>, // 신규 추가할 요금제만 관리
+        paymentAmount: 0,
+        paymentMethod: '카드 결제',
         memo: memberToEdit.memo,
         remainingQty: memberToEdit.plans.find(p => p.type === '횟수권')?.remainingQty ?? 0
       });
@@ -96,56 +90,60 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
     setError('');
     
     try {
-      let expireDate = '';
-      let totalMonths = 0;
-      let plansArr: any[] = [];
-      
+      // 3. 만료일 및 요금제 히스토리 계산
+      let expireDate = memberToEdit ? memberToEdit.expireDate : '';
+      let plansArr = memberToEdit ? [...memberToEdit.plans] : [];
+      let newHistoryItems: PlanHistoryItem[] = [];
+
       const today = new Date();
-      
+      const todayStr = today.toISOString().split('T')[0];
+
+      let totalMonths = 0;
       Object.entries(formData.planQs).forEach(([id, qty]) => {
         const p = customPlans.find(cp => cp.id === id);
-        if (p && qty > 0) {
-          totalMonths += (p.months || 0) * qty;
-          for (let i = 0; i < qty; i++) {
-            const planItem: any = {
-              name: p.name,
-              qty: p.type === '횟수권' ? (p.defaultQty || 1) : 1,
-              type: p.type
-            };
-            if (p.type === '횟수권') {
-              planItem.remainingQty = (p.defaultQty || 1);
-            }
-            plansArr.push(planItem);
-          }
-        }
+        if (p) totalMonths += (p.months || 0) * qty;
       });
 
       if (totalMonths > 0) {
+        // 기준 날짜 결정 (만료되지 않았으면 기존 만료일, 만료되었거나 신규면 오늘/시작일)
+        let baseDate: Date;
         if (memberToEdit) {
-          const originalTotalMonths = memberToEdit.plans.reduce((acc, p) => {
-            const matched = customPlans.find(cp => cp.name === p.name);
-            return acc + (matched?.months || 0);
-          }, 0);
-
-          const addedMonths = totalMonths - originalTotalMonths;
-
-          if (addedMonths > 0) {
-            const currentExpire = new Date(memberToEdit.expireDate);
-            const baseDate = currentExpire > today ? currentExpire : today;
-            baseDate.setMonth(baseDate.getMonth() + addedMonths);
-            expireDate = baseDate.toISOString().split('T')[0];
-          } else {
-            const start = new Date(formData.startDate);
-            start.setMonth(start.getMonth() + totalMonths);
-            expireDate = start.toISOString().split('T')[0];
-          }
+          const currentExp = new Date(memberToEdit.expireDate);
+          baseDate = currentExp > today ? currentExp : today;
         } else {
-          const start = new Date(formData.startDate);
-          start.setMonth(start.getMonth() + totalMonths);
-          expireDate = start.toISOString().split('T')[0];
+          baseDate = new Date(formData.startDate);
         }
+
+        // 새 만료일 계산
+        const newBase = new Date(baseDate);
+        newBase.setMonth(newBase.getMonth() + totalMonths);
+        expireDate = newBase.toISOString().split('T')[0];
+
+        // 새로운 요금제 정보 생성 및 히스토리 기록
+        Object.entries(formData.planQs).forEach(([id, qty]) => {
+          const p = customPlans.find(cp => cp.id === id);
+          if (p && qty > 0) {
+            newHistoryItems.push({
+              id: Math.random().toString(36).substr(2, 9),
+              date: todayStr,
+              planName: p.name,
+              amount: p.price * qty,
+              months: p.months * qty,
+              type: memberToEdit ? '연장' : '신규'
+            });
+
+            for (let i = 0; i < qty; i++) {
+              plansArr.push({
+                name: p.name,
+                qty: p.type === '횟수권' ? (p.defaultQty || 1) : 1,
+                type: p.type,
+                remainingQty: p.type === '횟수권' ? (p.defaultQty || 1) : undefined
+              });
+            }
+          }
+        });
       } else if (memberToEdit) {
-        expireDate = memberToEdit.expireDate;
+        // 요금제 추가 없이 정보만 수정하는 경우 (횟수권 잔여량은 수동 수정 가능)
         plansArr = memberToEdit.plans.map(p => {
           if (p.type === '횟수권') {
             return { ...p, remainingQty: Number(formData.remainingQty) };
@@ -166,7 +164,10 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
         paymentAmount: Number(formData.paymentAmount) || 0,
         paymentMethod: formData.paymentMethod,
         expireDate,
-        memo: formData.memo
+        memo: formData.memo,
+        planHistory: memberToEdit 
+          ? [...(memberToEdit.planHistory || []), ...newHistoryItems] 
+          : newHistoryItems
       };
 
       console.log('--- Firestore 전송 페이로드 ---');
@@ -291,7 +292,7 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                  <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>요금제 연장/새 결제 <span style={{fontSize: '0.7rem', color: 'var(--on-surface-variant)', fontWeight: 400}}>(금액/기간 자동 합산)</span></label>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>신규 요금제 연장/결제 <span style={{fontSize: '0.7rem', color: 'var(--on-surface-variant)', fontWeight: 400}}>(선택 시 금액/기간 자동 연장)</span></label>
                   {(() => {
                     let previewExpire = '';
                     let tempMonths = 0;
@@ -301,27 +302,16 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
                     });
                     
                     if (tempMonths > 0) {
+                      let base: Date;
                       if (memberToEdit) {
-                        const originalTotal = memberToEdit.plans.reduce((acc, p) => {
-                          const matched = customPlans.find(cp => cp.name === p.name);
-                          return acc + (matched?.months || 0);
-                        }, 0);
-                        const added = tempMonths - originalTotal;
-                        if (added > 0) {
-                          const curr = new Date(memberToEdit.expireDate);
-                          const base = curr > new Date() ? curr : new Date();
-                          base.setMonth(base.getMonth() + added);
-                          previewExpire = base.toISOString().split('T')[0];
-                        } else {
-                          const start = new Date(formData.startDate);
-                          start.setMonth(start.getMonth() + tempMonths);
-                          previewExpire = start.toISOString().split('T')[0];
-                        }
+                        const curr = new Date(memberToEdit.expireDate);
+                        base = curr > new Date() ? curr : new Date();
                       } else {
-                        const start = new Date(formData.startDate);
-                        start.setMonth(start.getMonth() + tempMonths);
-                        previewExpire = start.toISOString().split('T')[0];
+                        base = new Date(formData.startDate);
                       }
+                      const newBase = new Date(base);
+                      newBase.setMonth(newBase.getMonth() + tempMonths);
+                      previewExpire = newBase.toISOString().split('T')[0];
                     } else if (memberToEdit) {
                       previewExpire = memberToEdit.expireDate;
                     }

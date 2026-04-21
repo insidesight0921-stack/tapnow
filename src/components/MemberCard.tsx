@@ -1,13 +1,15 @@
 import { useStore, type Member } from '../store/useStore';
-import { MoreHorizontal, Trash2 } from 'lucide-react';
+import { Trash2, Edit2 } from 'lucide-react';
 
 interface MemberCardProps {
   member: Member;
   isSelected?: boolean;
   onToggleSelection?: (id: string) => void;
+  onDetail?: (member: Member) => void;
+  onAttendanceSuccess?: (data: any) => void;
 }
 
-export default function MemberCard({ member, isSelected, onToggleSelection }: MemberCardProps) {
+export default function MemberCard({ member, isSelected, onToggleSelection, onDetail, onAttendanceSuccess }: MemberCardProps) {
   const markAttendance = useStore(state => state.markAttendance);
   const deleteMember = useStore(state => state.deleteMember);
   const openMemberModal = useStore(state => state.openMemberModal);
@@ -27,10 +29,10 @@ export default function MemberCard({ member, isSelected, onToggleSelection }: Me
   const isUrgent = dday !== null && dday >= 0 && dday <= 3;
   const isWarning = dday !== null && dday >= 0 && dday <= 7 && !isUrgent;
 
-  // 횟수권 잔여 횟수
-  const ticketPlans = member.plans.filter(p => p.type === '횟수권' && p.remainingQty !== undefined);
-  const totalRemaining = ticketPlans.reduce((s, p) => s + (p.remainingQty ?? 0), 0);
+  // 횟수권 잔여 횟수 (기간권만 있는 경우 노출하지 않음)
+  const ticketPlans = member.plans.filter(p => p.type === '횟수권');
   const hasTicket = ticketPlans.length > 0;
+  const totalRemaining = hasTicket ? ticketPlans.reduce((s, p) => s + (p.remainingQty ?? 0), 0) : 0;
   const lowRemaining = hasTicket && totalRemaining <= 3;
 
   // 장기 미출석 (30일 이상)
@@ -61,7 +63,9 @@ export default function MemberCard({ member, isSelected, onToggleSelection }: Me
     onMouseOut={(e) => {
       e.currentTarget.style.transform = 'none';
       e.currentTarget.style.boxShadow = 'none';
-    }}>
+    }}
+    onClick={() => onDetail && onDetail(member)}
+    >
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative', gap: '0.5rem' }}>
         <div style={{ display: 'flex', gap: '0.75rem', flex: 1, minWidth: 0 }}>
@@ -91,17 +95,41 @@ export default function MemberCard({ member, isSelected, onToggleSelection }: Me
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem', flexShrink: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem', flexShrink: 0 }}>
           <span style={{
             background: status === '유효' ? 'rgba(82, 183, 136, 0.15)' : 'rgba(255, 180, 171, 0.15)',
             color: status === '유효' ? '#52b788' : 'var(--error)',
             padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap'
           }}>{status}</span>
-          {isUrgent && dday !== null && (
-            <span style={{ fontSize: '0.6875rem', color: 'var(--error)', fontWeight: 700, whiteSpace: 'nowrap' }}>🔴 D-{dday}</span>
+          
+          {hasTicket && (
+            <span style={{ 
+              fontSize: '0.8125rem', 
+              background: lowRemaining ? 'rgba(255,183,0,0.2)' : 'rgba(82,183,136,0.15)',
+              color: lowRemaining ? '#ffb700' : '#52b788',
+              fontWeight: 800,
+              padding: '0.25rem 0.625rem',
+              borderRadius: '6px',
+              whiteSpace: 'nowrap',
+              border: `1px solid ${lowRemaining ? '#ffb700' : '#52b788'}`
+            }}>
+              {totalRemaining}회 남음
+            </span>
           )}
-          {isWarning && dday !== null && (
-            <span style={{ fontSize: '0.6875rem', color: '#ffb700', fontWeight: 700, whiteSpace: 'nowrap' }}>⚠️ D-{dday}</span>
+
+          {dday !== null && !isExpired && (
+            <span style={{ 
+              fontSize: '0.8125rem', 
+              color: isUrgent ? 'var(--error)' : isWarning ? '#ffb700' : 'var(--tertiary)', 
+              fontWeight: 800, 
+              whiteSpace: 'nowrap',
+              background: isUrgent ? 'rgba(255,71,87,0.1)' : isWarning ? 'rgba(255,183,0,0.1)' : 'rgba(52,152,219,0.1)',
+              padding: '0.25rem 0.625rem',
+              borderRadius: '6px',
+              border: `1px solid ${isUrgent ? 'var(--error)' : isWarning ? '#ffb700' : 'var(--tertiary)'}`
+            }}>
+              D-{dday === 0 ? 'Day' : String(dday).padStart(2, '0')}
+            </span>
           )}
         </div>
       </div>
@@ -148,10 +176,16 @@ export default function MemberCard({ member, isSelected, onToggleSelection }: Me
           }}
           onMouseOver={(e) => { if (!attendedToday) { e.currentTarget.style.background = '#52b788'; e.currentTarget.style.color = '#000'; }}}
           onMouseOut={(e) => { if (!attendedToday) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#52b788'; }}}
-          onClick={async () => {
+          onClick={async (e) => {
+            e.stopPropagation();
             if (attendedToday) return;
             const res = await markAttendance(member.id);
-            alert(res.message);
+            if (onAttendanceSuccess && res.success) {
+              onAttendanceSuccess(res.data);
+            } else if (!res.success) {
+              // 실패 시에만 안내 (이미 출석 등)
+              alert(res.message);
+            }
           }}
         >
           {attendedToday ? '✅ 출석 완료' : '출석 처리'}
@@ -164,9 +198,9 @@ export default function MemberCard({ member, isSelected, onToggleSelection }: Me
         }}
           onMouseOver={(e) => { e.currentTarget.style.background = 'var(--surface-bright)'; }}
           onMouseOut={(e) => { e.currentTarget.style.background = 'var(--surface-container-highest)'; }}
-          onClick={() => openMemberModal(member)}
+          onClick={(e) => { e.stopPropagation(); openMemberModal(member); }}
         >
-          <MoreHorizontal size={20} />
+          <Edit2 size={18} />
         </button>
 
         <button style={{
@@ -176,7 +210,8 @@ export default function MemberCard({ member, isSelected, onToggleSelection }: Me
         }}
           onMouseOver={(e) => { e.currentTarget.style.background = 'var(--error)'; e.currentTarget.style.color = '#fff'; }}
           onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255,71,87,0.1)'; e.currentTarget.style.color = 'var(--error)'; }}
-          onClick={async () => {
+          onClick={async (e) => {
+            e.stopPropagation();
             if (confirm(`${member.name} 회원을 삭제하시겠습니까? 관련 데이터가 모두 삭제됩니다.`)) {
               await deleteMember(member.id);
             }
