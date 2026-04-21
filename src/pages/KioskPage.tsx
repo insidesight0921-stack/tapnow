@@ -144,12 +144,19 @@ export default function KioskPage() {
 
               <button 
                 type="button"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                    if (confirm('관리자 계정으로 다시 로그인하여 관리자 페이지로 진입하시겠습니까?')) {
+                onClick={async () => {
+                  if (confirm('관리자 계정으로 다시 로그인하여 관리자 페이지로 진입하시겠습니까?')) {
+                    try {
                       await logout();
-                      navigate('/login');
+                      // 세션 정리를 위해 약간의 지연 후 이동
+                      setTimeout(() => {
+                        window.location.href = '/login';
+                      }, 100);
+                    } catch (err) {
+                      console.error('Logout error:', err);
+                      window.location.href = '/login';
                     }
+                  }
                 }}
                 style={{ 
                   marginTop: '1.5rem', background: 'transparent', border: 'none', 
