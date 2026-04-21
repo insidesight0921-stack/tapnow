@@ -104,9 +104,12 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
         if (p) totalMonths += (p.months || 0) * qty;
       });
 
+      const hasNewPlans = Object.keys(formData.planQs).length > 0;
+      if (hasNewPlans) {
+        plansArr = []; // 신규 요금제 결제 시 기존 요금제 정보는 기록으로만 남기고 초기화
+      }
+
       if (totalMonths > 0) {
-        // 새로운 요금제가 추가되는 경우 기존 활성 요금제는 히스토리로 넘기고 초기화
-        plansArr = [];
         // 기준 날짜 결정 (만료되지 않았으면 기존 만료일, 만료되었거나 신규면 오늘/시작일)
         let baseDate: Date;
         if (memberToEdit) {
