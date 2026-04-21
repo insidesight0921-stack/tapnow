@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, CreditCard, History, Phone, Award } from 'lucide-react';
-import type { Member } from '../store/useStore';
+import { X, Calendar, CreditCard, History, Phone, Award, Edit2, Check, RotateCcw } from 'lucide-react';
+import { useStore, type Member, type PlanHistoryItem } from '../store/useStore';
 
 interface MemberDetailModalProps {
   isOpen: boolean;
@@ -9,6 +10,10 @@ interface MemberDetailModalProps {
 }
 
 export default function MemberDetailModal({ isOpen, onClose, member }: MemberDetailModalProps) {
+  const updateMemberHistoryItem = useStore(state => state.updateMemberHistoryItem);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Partial<PlanHistoryItem>>({});
+
   if (!member) return null;
 
   const isExpired = member.expireDate && new Date(member.expireDate) < new Date();
@@ -151,21 +156,112 @@ export default function MemberDetailModal({ isOpen, onClose, member }: MemberDet
                       <tbody>
                         {member.planHistory.map((h, i) => (
                           <tr key={i} style={{ borderTop: '1px solid var(--outline-variant)' }}>
-                            <td style={{ padding: '0.75rem' }}>{h.date}</td>
-                            <td style={{ padding: '0.75rem', fontWeight: 600 }}>{h.planName}</td>
                             <td style={{ padding: '0.75rem' }}>
-                              <span style={{
-                                padding: '0.125rem 0.375rem',
-                                borderRadius: '4px',
-                                background: h.type === '신규' ? 'rgba(52,152,219,0.1)' : 'rgba(82,183,136,0.1)',
-                                color: h.type === '신규' ? '#3498db' : '#52b788',
-                                fontSize: '0.6875rem',
-                                fontWeight: 600
-                              }}>
-                                {h.type}
-                              </span>
+                              {editingId === h.id ? (
+                                <input 
+                                  type="date"
+                                  value={editValues.date || h.date}
+                                  onChange={(e) => setEditValues({ ...editValues, date: e.target.value })}
+                                  style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.75rem', padding: '0.25rem', borderRadius: '4px', width: '100%' }}
+                                />
+                              ) : h.date}
                             </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'right' }}>{h.amount.toLocaleString()}원</td>
+                            <td style={{ padding: '0.75rem', fontWeight: 600 }}>
+                              {editingId === h.id ? (
+                                <input 
+                                  type="text"
+                                  value={editValues.planName || h.planName}
+                                  onChange={(e) => setEditValues({ ...editValues, planName: e.target.value })}
+                                  style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.75rem', padding: '0.25rem', borderRadius: '4px', width: '100%' }}
+                                />
+                              ) : h.planName}
+                            </td>
+                            <td style={{ padding: '0.75rem' }}>
+                              {editingId === h.id ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                  <select 
+                                    value={editValues.planType || h.planType}
+                                    onChange={(e) => setEditValues({ ...editValues, planType: e.target.value as any })}
+                                    style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.7rem', padding: '0.2rem', borderRadius: '4px' }}
+                                  >
+                                    <option value="기간권">기간권</option>
+                                    <option value="횟수권">횟수권</option>
+                                  </select>
+                                  <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                                    <input 
+                                      type="number"
+                                      placeholder={editValues.planType === '횟수권' || (h.planType === '횟수권' && !editValues.planType) ? "횟수" : "개월"}
+                                      value={editValues.planType === '횟수권' || (h.planType === '횟수권' && !editValues.planType) ? (editValues.qty ?? h.qty ?? 0) : (editValues.months ?? h.months ?? 0)}
+                                      onChange={(e) => {
+                                        const val = parseInt(e.target.value);
+                                        if (editValues.planType === '횟수권' || (h.planType === '횟수권' && !editValues.planType)) {
+                                          setEditValues({ ...editValues, qty: val, months: 0 });
+                                        } else {
+                                          setEditValues({ ...editValues, months: val, qty: 0 });
+                                        }
+                                      }}
+                                      style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.7rem', padding: '0.2rem', borderRadius: '4px', width: '40px' }}
+                                    />
+                                    <span style={{ fontSize: '0.65rem' }}>{editValues.planType === '횟수권' || (h.planType === '횟수권' && !editValues.planType) ? "회" : "개월"}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span style={{
+                                  padding: '0.125rem 0.375rem',
+                                  borderRadius: '4px',
+                                  background: h.type === '신규' ? 'rgba(52,152,219,0.1)' : 'rgba(82,183,136,0.1)',
+                                  color: h.type === '신규' ? '#3498db' : '#52b788',
+                                  fontSize: '0.6875rem',
+                                  fontWeight: 600
+                                }}>
+                                  {h.type} ({h.planType})
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                              {editingId === h.id ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end' }}>
+                                  <input 
+                                    type="number"
+                                    value={editValues.amount ?? h.amount}
+                                    onChange={(e) => setEditValues({ ...editValues, amount: parseInt(e.target.value) })}
+                                    style={{ background: 'var(--surface-container-highest)', border: '1px solid var(--outline)', color: 'var(--on-surface)', fontSize: '0.75rem', padding: '0.25rem', borderRadius: '4px', width: '60px', textAlign: 'right' }}
+                                  />
+                                  <button 
+                                    onClick={async () => {
+                                      await updateMemberHistoryItem(member.id, h.id, editValues);
+                                      setEditingId(null);
+                                      setEditValues({});
+                                    }}
+                                    style={{ background: 'var(--tertiary)', border: 'none', color: '#000', padding: '0.25rem', borderRadius: '4px', cursor: 'pointer' }}
+                                  >
+                                    <Check size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={() => { setEditingId(null); setEditValues({}); }}
+                                    style={{ background: 'var(--surface-container-highest)', border: 'none', color: 'var(--on-surface-variant)', padding: '0.25rem', borderRadius: '4px', cursor: 'pointer' }}
+                                  >
+                                    <RotateCcw size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                  <span>{h.amount.toLocaleString()}원</span>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingId(h.id);
+                                      setEditValues(h);
+                                    }}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', opacity: 0.6 }}
+                                    onMouseOver={(e) => (e.currentTarget.style.opacity = '1')}
+                                    onMouseOut={(e) => (e.currentTarget.style.opacity = '0.6')}
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

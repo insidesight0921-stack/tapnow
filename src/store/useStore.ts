@@ -46,6 +46,8 @@ export interface PlanHistoryItem {
   planName: string;
   amount: number;
   months: number;
+  qty?: number; // 횟수권일 경우 횟수
+  planType: '횟수권' | '기간권';
   type: '신규' | '연장' | '변경';
 }
 
@@ -160,6 +162,8 @@ interface AppState extends AppData {
   }>;
   bulkMarkAttendance: (memberIds: string[]) => Promise<{ success: boolean; count: number; total: number; }>;
   bulkDeleteMembers: (memberIds: string[]) => Promise<void>;
+  updateMemberHistoryItem: (memberId: string, historyId: string, updated: Partial<PlanHistoryItem>) => Promise<void>;
+  recalculateMemberStatus: (memberId: string) => Promise<void>;
   deleteAttendance: (attendanceId: string) => Promise<void>;
   addPastAttendance: (memberId: string, dateStr: string) => Promise<void>;
 
@@ -631,6 +635,79 @@ export const useStore = create<AppState>((set, get) => ({
       console.error('[Bulk] Deletion failed:', err);
       throw err;
     }
+  },
+
+  updateMemberHistoryItem: async (memberId, historyId, updated) => {
+    const { members } = get();
+    const member = members.find(m => m.id === memberId);
+    if (!member || !member.planHistory) return;
+
+    const updatedHistory = member.planHistory.map(h => 
+      h.id === historyId ? { ...h, ...updated } : h
+    );
+
+    await updateDoc(doc(db, 'members', memberId), { planHistory: updatedHistory });
+    // 히스토리 수정 후 즉시 재계산 실행
+    await get().recalculateMemberStatus(memberId);
+  },
+
+  recalculateMemberStatus: async (memberId) => {
+    const { members, attendances } = get();
+    const member = members.find(m => m.id === memberId);
+    if (!member) return;
+
+    // 1. 해당 회원의 모든 출석 횟수 계산
+    const memberAttendances = attendances.filter(a => a.memberId === memberId);
+    const attendanceCount = memberAttendances.length;
+
+    // 2. 히스토리를 기반으로 만료일 및 총 횟수 계산
+    const history = member.planHistory || [];
+    let totalMonths = 0;
+    let totalQty = 0;
+    
+    // 기간권/횟수권 유형별 집계
+    const ticketPlans: PlanItem[] = [];
+    const periodPlans: PlanItem[] = [];
+
+    history.forEach(h => {
+      totalMonths += (h.months || 0);
+      if (h.planType === '횟수권') {
+        const qty = h.qty || 0;
+        totalQty += qty;
+        ticketPlans.push({ name: h.planName, qty: 1, type: '횟수권', remainingQty: qty });
+      } else {
+        periodPlans.push({ name: h.planName, qty: 1, type: '기간권' });
+      }
+    });
+
+    // 만료일 재계산 (startDate 기준)
+    const startDate = new Date(member.startDate || member.registerDate);
+    const newExpireDate = new Date(startDate.getFullYear(), startDate.getMonth() + totalMonths, startDate.getDate());
+    
+    // 횟수권 잔여 횟수 재계산 (전체 합산 - 전체 출석)
+    const remainingQty = Math.max(-99, totalQty - attendanceCount);
+    
+    // 횟수권이 여러 개일 경우 첫 번째 plan에 잔여량을 몰아주거나 분산 (여기서는 단순화하여 하나로 합산 처리하거나 필드 업데이트)
+    const updatedPlans: PlanItem[] = [];
+    if (totalQty > 0) {
+      updatedPlans.push({
+        name: history.find(h => h.planType === '횟수권')?.planName || '횟수권',
+        qty: 1,
+        type: '횟수권',
+        remainingQty: remainingQty
+      });
+    }
+    // 기간권 정보 추가
+    history.filter(h => h.planType === '기간권').forEach(h => {
+      if (!updatedPlans.find(p => p.name === h.planName)) {
+        updatedPlans.push({ name: h.planName, qty: 1, type: '기간권' });
+      }
+    });
+
+    await updateDoc(doc(db, 'members', memberId), {
+      expireDate: newExpireDate.toISOString().split('T')[0],
+      plans: updatedPlans
+    });
   },
 
   deleteAttendance: async (id) => {

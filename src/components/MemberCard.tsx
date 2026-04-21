@@ -102,35 +102,42 @@ export default function MemberCard({ member, isSelected, onToggleSelection, onDe
             padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap'
           }}>{status}</span>
           
-          {hasTicket && (
-            <span style={{ 
-              fontSize: '0.8125rem', 
-              background: lowRemaining ? 'rgba(255,183,0,0.2)' : 'rgba(82,183,136,0.15)',
-              color: lowRemaining ? '#ffb700' : '#52b788',
-              fontWeight: 800,
-              padding: '0.25rem 0.625rem',
-              borderRadius: '6px',
-              whiteSpace: 'nowrap',
-              border: `1px solid ${lowRemaining ? '#ffb700' : '#52b788'}`
-            }}>
-              {totalRemaining}회 남음
-            </span>
-          )}
+          {/* 주요 상태 배지 (횟수 또는 D-day) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'flex-end' }}>
+            {hasTicket && (
+              <span style={{ 
+                fontSize: '0.8125rem', 
+                background: lowRemaining ? 'rgba(255,183,0,0.2)' : 'rgba(82,183,136,0.15)',
+                color: lowRemaining ? '#ffb700' : '#52b788',
+                fontWeight: 800,
+                padding: '0.25rem 0.625rem',
+                borderRadius: '6px',
+                whiteSpace: 'nowrap',
+                border: `1px solid ${lowRemaining ? '#ffb700' : '#52b788'}`,
+                minWidth: '70px',
+                textAlign: 'center'
+              }}>
+                {totalRemaining}회 남음
+              </span>
+            )}
 
-          {dday !== null && !isExpired && (
-            <span style={{ 
-              fontSize: '0.8125rem', 
-              color: isUrgent ? 'var(--error)' : isWarning ? '#ffb700' : 'var(--tertiary)', 
-              fontWeight: 800, 
-              whiteSpace: 'nowrap',
-              background: isUrgent ? 'rgba(255,71,87,0.1)' : isWarning ? 'rgba(255,183,0,0.1)' : 'rgba(52,152,219,0.1)',
-              padding: '0.25rem 0.625rem',
-              borderRadius: '6px',
-              border: `1px solid ${isUrgent ? 'var(--error)' : isWarning ? '#ffb700' : 'var(--tertiary)'}`
-            }}>
-              D-{dday === 0 ? 'Day' : String(dday).padStart(2, '0')}
-            </span>
-          )}
+            {dday !== null && !isExpired && (
+              <span style={{ 
+                fontSize: '0.8125rem', 
+                color: isUrgent ? 'var(--error)' : isWarning ? '#ffb700' : 'var(--tertiary)', 
+                fontWeight: 800, 
+                whiteSpace: 'nowrap',
+                background: isUrgent ? 'rgba(255,71,87,0.1)' : isWarning ? 'rgba(255,183,0,0.1)' : 'rgba(52,152,219,0.1)',
+                padding: '0.25rem 0.625rem',
+                borderRadius: '6px',
+                border: `1px solid ${isUrgent ? 'var(--error)' : isWarning ? '#ffb700' : 'var(--tertiary)'}`,
+                minWidth: '70px',
+                textAlign: 'center'
+              }}>
+                D-{dday === 0 ? 'Day' : String(dday).padStart(2, '0')}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

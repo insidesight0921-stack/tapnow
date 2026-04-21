@@ -129,6 +129,8 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
               planName: p.name,
               amount: p.price * qty,
               months: p.months * qty,
+              qty: p.type === '횟수권' ? (p.defaultQty || 1) * qty : 0,
+              planType: p.type,
               type: memberToEdit ? '연장' : '신규'
             });
 

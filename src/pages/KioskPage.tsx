@@ -143,16 +143,24 @@ export default function KioskPage() {
               </div>
 
               <button 
-                onClick={async () => {
-                  if (window.confirm('관리자 계정으로 다시 로그인하여 관리자 페이지로 진입하시겠습니까?')) {
-                    await logout();
-                    navigate('/login');
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (confirm('관리자 계정으로 다시 로그인하여 관리자 페이지로 진입하시겠습니까?')) {
+                    try {
+                      await logout();
+                      navigate('/login', { replace: true });
+                    } catch (err) {
+                      console.error('Logout failed:', err);
+                      navigate('/login', { replace: true });
+                    }
                   }
                 }}
                 style={{ 
                   marginTop: '1.5rem', background: 'transparent', border: 'none', 
                   color: 'var(--on-surface-variant)', textDecoration: 'underline', 
-                  fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' 
+                  fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer',
+                  padding: '10px' 
                 }}
               >
                 PIN을 잊으셨나요? 관리자 계정으로 재인증
