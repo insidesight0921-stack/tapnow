@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, CreditCard, History, Phone, Award, Edit2, Check, RotateCcw, Trash2, CheckCircle2 } from 'lucide-react';
-import { useStore, type Member, type PlanHistoryItem, type Plan } from '../store/useStore';
+import { useStore, type Member, type PlanHistoryItem } from '../store/useStore';
 
 interface MemberDetailModalProps {
   isOpen: boolean;
