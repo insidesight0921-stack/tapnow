@@ -35,7 +35,8 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
     paymentAmount: 0,
     paymentMethod: '카드 결제',
     memo: '',
-    remainingQty: 0 // 수정 시 사용
+    remainingQty: 0, // 수정 시 사용
+    saveToPayment: true // 결제 기록 저장 여부
   });
   const [error, setError] = useState('');
 
@@ -52,14 +53,15 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
         paymentAmount: 0,
         paymentMethod: '카드 결제',
         memo: memberToEdit.memo,
-        remainingQty: memberToEdit.plans.find(p => p.type === '횟수권')?.remainingQty ?? 0
+        remainingQty: memberToEdit.plans.find(p => p.type === '횟수권')?.remainingQty ?? 0,
+        saveToPayment: true
       });
     } else {
       setFormData({
         name: '', phone: '', belt: '화이트', gral: 0,
         registerDate: new Date().toISOString().split('T')[0],
         startDate: new Date().toISOString().split('T')[0],
-        planQs: {}, paymentAmount: 0, paymentMethod: '카드 결제', memo: '', remainingQty: 0
+        planQs: {}, paymentAmount: 0, paymentMethod: '카드 결제', memo: '', remainingQty: 0, saveToPayment: true
       });
     }
     setError('');
@@ -177,20 +179,47 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
           : newHistoryItems
       };
 
-      console.log('--- Firestore 전송 페이로드 ---');
       console.log(JSON.stringify(payload, null, 2));
 
+      let memberIdToUse = '';
       if (memberToEdit) {
+        memberIdToUse = memberToEdit.id;
         await updateMember(memberToEdit.id, payload);
-        onClose();
       } else {
         const result = await addMember(payload);
-        if (result.success) {
-          onClose();
+        if (result.success && (result as any).id) {
+          memberIdToUse = (result as any).id;
+        } else if (result.success) {
+          // fallback: members 리스트에서 방금 추가된 멤버 찾기 (약간의 레이턴시 위험 있음)
+          // 하지만 대부분의 경우 addMember가 ID를 반환하도록 스토어를 수정하는게 좋음.
         } else {
           setError(result.message);
+          setIsSubmitting(false);
+          return;
         }
       }
+
+      // 결제 기록 자동 생성
+      if (formData.saveToPayment && Number(formData.paymentAmount) > 0) {
+        const selectedPlanNames = Object.entries(formData.planQs)
+          .filter(([_, qty]) => qty > 0)
+          .map(([id, _]) => customPlans.find(p => p.id === id)?.name)
+          .filter(Boolean)
+          .join(', ');
+
+        await useStore.getState().addPayment({
+          gymId: currentGymId,
+          memberId: memberIdToUse || undefined,
+          memberName: formData.name,
+          amount: Number(formData.paymentAmount),
+          method: formData.paymentMethod as any,
+          planName: selectedPlanNames || '수동 갱신',
+          date: todayStr,
+          status: '완료'
+        });
+      }
+
+      onClose();
     } catch (err: any) {
       console.error('Submit Error:', err);
       setError('처리 중 오류가 발생했습니다: ' + (err.message || '서버 응답 없음'));
@@ -381,6 +410,20 @@ export default function MemberFormModal({ isOpen, onClose, memberToEdit }: Membe
                     <option value="현금">현금</option>
                   </select>
                 </div>
+              </div>
+
+              {/* 결제 기록 저장 체크박스 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--surface-container-lowest)', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--outline-variant)' }}>
+                <input 
+                  type="checkbox" 
+                  id="saveToPayment" 
+                  checked={formData.saveToPayment} 
+                  onChange={e => setFormData({...formData, saveToPayment: e.target.checked})}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                />
+                <label htmlFor="saveToPayment" style={{ fontSize: '0.875rem', cursor: 'pointer', fontWeight: 600, color: 'var(--on-surface)' }}>
+                  결제 관리 탭에 자동으로 기록 저장
+                </label>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

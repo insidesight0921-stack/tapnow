@@ -97,7 +97,7 @@ export interface Payment {
   planName?: string;
   item?: string;
   date: string;
-  status: '완료' | '미납' | 'paid';
+  status: '완료' | '미납' | 'paid' | '취소';
 }
 
 interface AppData {
@@ -169,7 +169,8 @@ interface AppState extends AppData {
   deleteMemberHistoryItem: (memberId: string, historyId: string) => Promise<void>;
 
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
-  updatePaymentStatus: (id: string, status: '완료' | '미납') => Promise<void>;
+  updatePaymentStatus: (id: string, status: '완료' | '미납' | '취소') => Promise<void>;
+  deletePayment: (id: string) => Promise<void>;
   updateGymPlan: (plan: GymAccount['plan'], months?: number) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
 
@@ -474,11 +475,10 @@ export const useStore = create<AppState>((set, get) => ({
 
     try {
       const cleanedMember = cleanData(member);
-      await addDoc(collection(db, 'members'), { ...cleanedMember, gymId });
-      return { success: true, message: '회원이 성공적으로 등록되었습니다.' };
+      const docRef = await addDoc(collection(db, 'members'), { ...cleanedMember, gymId });
+      return { success: true, message: '회원이 성공적으로 등록되었습니다.', id: docRef.id };
     } catch (err: any) {
       console.error('Add Member Error:', err);
-      // 에러 메시지에 더 상세한 정보 포함 (개발 단계 디버깅 용이)
       const errorMsg = err?.message || '알 수 없는 서버 오류';
       return { success: false, message: `회원 등록 실패: ${errorMsg}` };
     }
@@ -784,6 +784,10 @@ export const useStore = create<AppState>((set, get) => ({
 
   updatePaymentStatus: async (id, status) => {
     await updateDoc(doc(db, 'payments', id), { status });
+  },
+
+  deletePayment: async (id) => {
+    await deleteDoc(doc(db, 'payments', id));
   },
 
   updateGymPlan: async (plan: GymAccount['plan'], months: number = 1) => {

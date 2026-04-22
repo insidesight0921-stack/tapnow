@@ -113,7 +113,7 @@ export default function PaymentPage() {
 
   const [monthFilter, setMonthFilter] = useState(() => new Date().toISOString().slice(0, 7));
   const [methodFilter, setMethodFilter] = useState<'전체' | '카드' | '현금' | '계좌이체' | '기타'>('전체');
-  const [statusFilter, setStatusFilter] = useState<'전체' | '완료'>('전체');
+  const [statusFilter, setStatusFilter] = useState<'전체' | '완료' | '미납' | '취소'>('전체');
   const [search, setSearch] = useState('');
 
   const filtered = gymPayments.filter(p => {
@@ -125,6 +125,8 @@ export default function PaymentPage() {
   });
 
   const totalRevenue = filtered.filter(p => p.status === '완료').reduce((s, p) => s + p.amount, 0);
+  const totalCount = filtered.filter(p => p.status === '완료').length;
+  const cancelledCount = filtered.filter(p => p.status === '취소').length;
 
   // 결제 수단별 합계
   const methods = ['카드', '현금', '계좌이체', '기타'] as const;
@@ -147,8 +149,8 @@ export default function PaymentPage() {
               <div style={{ fontSize: isMobile ? '1.125rem' : '1.75rem', fontWeight: 700, color: 'var(--tertiary)' }}>{totalRevenue.toLocaleString()}원</div>
             </div>
             <div className="glass-panel" style={{ padding: isMobile ? '1rem' : '1.25rem', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ fontSize: '0.6875rem', color: 'var(--on-surface-variant)', marginBottom: '0.375rem' }}>전체 결제 건수</div>
-              <div style={{ fontSize: isMobile ? '1.125rem' : '1.75rem', fontWeight: 700, color: '#52b788' }}>{filtered.length.toLocaleString()}건</div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--on-surface-variant)', marginBottom: '0.375rem', fontWeight: 600 }}>결제 완료 건수</div>
+              <div style={{ fontSize: isMobile ? '1.125rem' : '1.75rem', fontWeight: 700, color: '#52b788' }}>{totalCount.toLocaleString()}건 <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--on-surface-variant)' }}>(취소 {cancelledCount}건)</span></div>
             </div>
         </div>
         <div className="glass-panel" style={{ padding: isMobile ? '1rem' : '1.25rem', borderRadius: 'var(--radius-md)' }}>
@@ -196,8 +198,8 @@ export default function PaymentPage() {
         </div>
         
         <div style={{ display: 'flex', gap: '0.5rem', width: isMobile ? '100%' : 'auto', flex: isMobile ? 'unset' : 1, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: '0.25rem', flex: isMobile ? 1 : 'unset' }}>
-                {(['전체', '완료'] as const).map(s => (
+            <div style={{ display: 'flex', gap: '0.25rem', flex: isMobile ? 1 : 'unset', overflowX: isMobile ? 'auto' : 'visible' }} className="no-wrap-group">
+                {(['전체', '완료', '미납', '취소'] as const).map(s => (
                 <button key={s} onClick={() => setStatusFilter(s)} style={{ flex: isMobile ? 1 : 'unset', background: statusFilter === s ? 'var(--primary)' : 'var(--surface-container-high)', color: statusFilter === s ? '#000' : 'var(--on-surface-variant)', border: 'none', padding: '0 1rem', borderRadius: '0.75rem', fontSize: '0.8125rem', fontWeight: statusFilter === s ? 700 : 500, cursor: 'pointer', height: '44px', whiteSpace: 'nowrap' }}>{s}</button>
                 ))}
             </div>
@@ -219,6 +221,7 @@ export default function PaymentPage() {
               <th style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--outline-variant)', textAlign: 'right' }}>금액</th>
               <th style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--outline-variant)', textAlign: 'center' }}>수단</th>
               <th style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--outline-variant)', textAlign: 'center' }}>상태</th>
+              <th style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--outline-variant)', textAlign: 'right' }}>관리</th>
             </tr>
           </thead>
           <tbody>
@@ -238,10 +241,39 @@ export default function PaymentPage() {
                 </td>
                 <td style={{ padding: '1rem', textAlign: 'center' }}>
                   <span style={{
-                    background: p.status === '완료' ? 'rgba(82,183,136,0.15)' : 'rgba(255,71,87,0.15)',
-                    color: p.status === '완료' ? '#52b788' : 'var(--error)',
-                    padding: '0.25rem 0.625rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600
+                    background: p.status === '완료' ? 'rgba(82,183,136,0.15)' : p.status === '취소' ? 'rgba(150,150,150,0.15)' : 'rgba(255,71,87,0.15)',
+                    color: p.status === '완료' ? '#52b788' : p.status === '취소' ? '#888' : 'var(--error)',
+                    padding: '0.25rem 0.625rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600,
+                    textDecoration: p.status === '취소' ? 'line-through' : 'none'
                   }}>{p.status}</span>
+                </td>
+                <td style={{ padding: '1rem', textAlign: 'right' }}>
+                  {p.status !== '취소' && (
+                    <button 
+                      onClick={() => {
+                        if (confirm('정말 이 결제 기록을 취소하시겠습니까? (매출 통계에서 제외됩니다)')) {
+                          useStore.getState().updatePaymentStatus(p.id, '취소');
+                        }
+                      }}
+                      style={{ 
+                        background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)',
+                        padding: '0.375rem 0.75rem', borderRadius: '0.5rem', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 500
+                      }}
+                    >
+                      결제 취소
+                    </button>
+                  )}
+                  {p.status === '취소' && (
+                    <button 
+                      onClick={() => useStore.getState().deletePayment(p.id)}
+                      style={{ 
+                        background: 'transparent', border: '1px solid var(--error)', color: 'var(--error)',
+                        padding: '0.375rem 0.75rem', borderRadius: '0.5rem', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 500, marginLeft: '0.5rem'
+                      }}
+                    >
+                      기록 삭제
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
